@@ -38,6 +38,7 @@ def configurar_navegador():
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--start-maximized")
+    chrome_options.add_argument("--headless=new")
     
     print("[DEBUG] 2. Lanzando instancia de Chrome...")
     try:
