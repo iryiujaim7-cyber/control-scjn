@@ -5,8 +5,7 @@ import requests
 from docx import Document
 from pypdf import PdfReader
 from io import BytesIO
-from google import genai
-from google.genai import types
+import google.generativeai as genai
 from scjn_scraper import buscar_normatividades_scjn
 
 # =====================================================================
@@ -32,7 +31,7 @@ if "resultados_busqueda" not in st.session_state:
     st.session_state.resultados_busqueda = []
 
 # =====================================================================
-# 2. INYECCIÓN DE IDENTIDAD VISUAL Y CORRECCIÓN DE CAJA DE CHAT
+# 2. INYECCIÓN DE IDENTIDAD VISUAL Y CAJA DE CHAT LUMINOSA
 # =====================================================================
 st.markdown(f"""
     <style>
@@ -93,22 +92,19 @@ st.markdown(f"""
         color: #1A2E40 !important;
     }}
 
-    /* ===================================================
-       FORZAR ESTILO LUMINOSO Y ELEGANTE EN LA CAJA DE CHAT
-       =================================================== */
+    /* Estilo luminoso y elegante para la caja de chat */
     div[data-testid="stChatInput"] {{
         background-color: #FFFFFF !important;
-        border: 2px solid #C5A059 !important; /* Borde Bronce Corporativo */
+        border: 2px solid #C5A059 !important; 
         border-radius: 12px !important;
         box-shadow: 0 4px 10px rgba(0,0,0,0.08) !important;
         padding: 5px !important;
     }}
     div[data-testid="stChatInput"] textarea {{
-        color: #1A2E40 !important; /* Letra Azul Marino */
+        color: #1A2E40 !important; 
         background-color: #FFFFFF !important;
         font-weight: 500 !important;
     }}
-    /* Modificar color del icono de enviar */
     div[data-testid="stChatInput"] svg {{
         fill: #C5A059 !important;
     }}
@@ -216,7 +212,7 @@ with col_der:
             st.rerun()
 
 # =====================================================================
-# 6. ENTORNO DE CONSULTA INTELIGENTE (FILES API CON TEXTO EN TXT)
+# 6. ENTORNO DE CONSULTA INTELIGENTE (SDK ESTABLE GOOGLE-GENERATIVEAI)
 # =====================================================================
 st.markdown("<br>", unsafe_allow_html=True)
 st.subheader("🤖 Asistente Jurídico Experto (Análisis RAG Unificado)")
@@ -246,10 +242,10 @@ else:
             
             with st.status("🧠 Analizando expediente unificado con Google GenAI...", expanded=True) as status:
                 try:
-                    client = genai.Client(api_key=GEMINI_API_KEY)
+                    # Configurar la API con el SDK Clásico
+                    genai.configure(api_key=GEMINI_API_KEY)
                     texto_total_unificado = ""
 
-                    # 1. Unificar textos de SCJN
                     status.write("⏬ Unificando textos de las leyes oficiales...")
                     for nombre_ley, url_ley in st.session_state.expediente.items():
                         try:
@@ -261,22 +257,19 @@ else:
                         except Exception:
                             pass
 
-                    # 2. Unificar textos locales
                     status.write("📖 Añadiendo textos de documentos locales...")
                     for nombre_doc, texto_doc in st.session_state.archivos_locales.items():
                         texto_total_unificado += f"\n\n=== ARCHIVO LOCAL CARGADO: {nombre_doc} ===\n{texto_doc}"
 
-                    # 3. Crear archivo de texto plano temporal para evadir límites de carga
                     status.write("🛡️ Encriptando contexto en archivo plano temporal...")
                     temp_txt_path = "contexto_unificado_agora.txt"
                     with open(temp_txt_path, "w", encoding="utf-8") as f:
                         f.write(texto_total_unificado)
 
-                    # 4. Subir a Files API (Esto soporta millones de tokens sin colapsar)
                     status.write("☁️ Subiendo expediente a la bóveda de análisis de Google...")
-                    archivo_nube = client.files.upload(file=temp_txt_path)
+                    # Subir el archivo .txt usando el gestor estable
+                    archivo_nube = genai.upload_file(temp_txt_path, mime_type="text/plain")
 
-                    # 5. Ejecutar la llamada con el archivo montado
                     status.write("⚖️ Ejecutando análisis jurisprudencial...")
                     instrucciones_sistema = (
                         "Actúas estrictamente como un sistema experto de análisis documental cerrado (estilo Google NotebookLM).\n"
@@ -290,28 +283,26 @@ else:
                         f"PREGUNTA DEL USUARIO:\n{pregunta_usuario}"
                     )
 
-                    response = client.models.generate_content(
-                        model='gemini-1.5-flash',
-                        contents=[archivo_nube, instrucciones_sistema],
-                        config=types.GenerateContentConfig(
-                            temperature=0.0
-                        )
+                    # Invocar al modelo
+                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    response = model.generate_content(
+                        [archivo_nube, instrucciones_sistema],
+                        generation_config={"temperature": 0.0}
                     )
                     
                     respuesta_ia = response.text
                     status.update(label="✅ Análisis completado con éxito", state="complete", expanded=False)
 
-                    # 6. Limpieza profunda
+                    # Limpieza segura de los archivos en Google y en el servidor
                     try:
-                        client.files.delete(name=archivo_nube.name)
+                        genai.delete_file(archivo_nube.name)
                         os.remove(temp_txt_path)
                     except Exception:
                         pass
 
                 except Exception as e_general:
-                    respuesta_ia = f"El motor analítico experimentó un fallo al subir el contexto. Detalle técnico: {str(e_general)}"
+                    respuesta_ia = f"El motor analítico experimentó un fallo. Detalle técnico: {str(e_general)}"
                     status.update(label="❌ Error de procesamiento en la nube", state="error", expanded=True)
-                    # Intentar limpiar archivo local en caso de error
                     if os.path.exists("contexto_unificado_agora.txt"):
                         os.remove("contexto_unificado_agora.txt")
             
