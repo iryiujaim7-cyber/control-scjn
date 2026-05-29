@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import requests
 from docx import Document
+from pypdf import PdfReader
 from io import BytesIO
 from scjn_scraper import buscar_normatividades_scjn
 
@@ -20,9 +21,11 @@ st.set_page_config(
 # Inicializar cliente de Gemini desde Secrets de forma segura
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 
-# Inicializar estados de la sesión para el expediente virtual y el chat
+# Inicializar estados de la sesión para el expediente virtual, archivos locales y chat
 if "expediente" not in st.session_state:
     st.session_state.expediente = {}  # {Nombre: Url_Descarga}
+if "archivos_locales" not in st.session_state:
+    st.session_state.archivos_locales = {}  # {Nombre: Texto_Extraido}
 if "historial_chat" not in st.session_state:
     st.session_state.historial_chat = []
 if "resultados_busqueda" not in st.session_state:
@@ -83,7 +86,7 @@ st.markdown(f"""
         color: #FFFFFF;
         border-color: #C5A059;
     }}
-    /* Variación específica para el botón de limpieza */
+    /* Botón de limpieza */
     div.stButton > button[key="limpiar_exp"] {{
         background-color: #E2E8F0 !important;
         color: #4A5568 !important;
@@ -110,9 +113,9 @@ st.markdown("<h5 style='text-align: center; font-weight: normal; color: #4A5568;
 st.markdown("<hr style='border-top: 1px solid #E2E8F0; margin-top: 0px; margin-bottom: 1.5rem;'>", unsafe_allow_html=True)
 
 # =====================================================================
-# 4. PANEL DE BÚSQUEDA DINÁMICA (MULTILEYES)
+# 4. PANEL DE BÚSQUEDA DINÁMICA (COLUMNA IZQUIERDA)
 # =====================================================================
-col_izq, col_der = st.columns([7, 5])
+col_izq, col_der = st.columns([6, 6])
 
 with col_izq:
     st.subheader("🔍 Consulta Directa en la SCJN")
@@ -126,12 +129,12 @@ with col_izq:
         else:
             st.warning("Por favor ingresa un concepto válido para buscar.")
 
-    # Desplegar lista de resultados protegida con botones estables de acción
+    # Desplegar lista de resultados
     if st.session_state.resultados_busqueda:
         st.markdown("##### Resultados encontrados. Añade los elementos necesarios a tu espacio de trabajo:")
         
         for idx, item in enumerate(st.session_state.resultados_busqueda):
-            col_info, col_btn = st.columns([4, 1])
+            col_info, col_btn = st.columns([4, 1.2])
             
             with col_info:
                 st.markdown(f"**{item['Normatividad']}**", unsafe_allow_html=True)
@@ -139,7 +142,6 @@ with col_izq:
                 st.caption(f"Enlace de origen: {item['Url Descarga']}")
             
             with col_btn:
-                # El botón almacena directamente en la sesión de forma persistente
                 if item["Normatividad"] in st.session_state.expediente:
                     st.markdown("<p style='color:#C5A059; font-weight:bold; text-align:center; margin-top:10px;'>Agregada ✓</p>", unsafe_allow_html=True)
                 else:
@@ -149,43 +151,85 @@ with col_izq:
             st.markdown("<hr style='border-top: 1px dashed #E2E8F0; margin: 0.5rem 0;'>", unsafe_allow_html=True)
 
 # =====================================================================
-# 5. EXPEDIENTE VIRTUAL (ACUMULADOR MULTIDISCIPLINARIO)
+# 5. EXPEDIENTE VIRTUAL Y CARGA DE ARCHIVOS LOCALES (COLUMNA DERECHA)
 # =====================================================================
 with col_der:
     st.subheader("📂 Tu Expediente Virtual de Análisis")
-    st.markdown("Documentos listos para el cruce analítico simultáneo:")
     
+    # --- SUBSECCIÓN A: Subir documentos propios ---
+    st.markdown("🌐 **Cargar documentos locales (.pdf, .docx):**")
+    archivos_subidos = st.file_uploader("Sube tus propios archivos para incluirlos en el cruce de información:", type=["pdf", "docx"], accept_multiple_files=True, label_visibility="collapsed")
+    
+    if archivos_subidos:
+        for archivo in archivos_subidos:
+            if archivo.name not in st.session_state.archivos_locales:
+                try:
+                    texto_extraido = ""
+                    if archivo.name.endswith(".pdf"):
+                        lector_pdf = PdfReader(BytesIO(archivo.read()))
+                        for pagina in lector_pdf.pages:
+                            texto_extraido += pagina.extract_text() + "\n"
+                    elif archivo.name.endswith(".docx"):
+                        doc_local = Document(BytesIO(archivo.read()))
+                        texto_extraido = "\n".join([p.text for p in doc_local.paragraphs])
+                    
+                    if texto_extraido.strip():
+                        st.session_state.archivos_locales[archivo.name] = texto_extraido
+                except Exception as e_archivo:
+                    st.error(f"Error procesando {archivo.name}: {str(e_archivo)}")
+
+    st.markdown("<br><p style='font-weight: bold; margin-bottom: 5px;'>Documentos listos para el cruce analítico simultáneo:</p>", unsafe_allow_html=True)
+    
+    hay_contenido = False
+    
+    # Desplegar leyes de la SCJN
     if st.session_state.expediente:
+        hay_contenido = True
         for ley in list(st.session_state.expediente.keys()):
             col_ley_txt, col_ley_del = st.columns([7, 1])
             with col_ley_txt:
-                st.markdown(f"✅ `<span style='color:#1A2E40; font-weight:600;'>{ley}</span>`", unsafe_allow_html=True)
+                st.markdown(f"🏛️ `<span style='color:#1A2E40; font-weight:600;'>{ley}</span>` (SCJN)", unsafe_allow_html=True)
             with col_ley_del:
-                if st.button("❌", key=f"del_{ley}"):
+                if st.button("❌", key=f"del_scjn_{ley}"):
                     st.session_state.expediente.pop(ley, None)
                     st.rerun()
-        
+
+    # Desplegar archivos locales cargados
+    if st.session_state.archivos_locales:
+        hay_contenido = True
+        for nombre_doc in list(st.session_state.archivos_locales.keys()):
+            col_doc_txt, col_doc_del = st.columns([7, 1])
+            with col_doc_txt:
+                st.markdown(f"📄 `<span style='color:#C5A059; font-weight:600;'>{nombre_doc}</span>` (Archivo local)", unsafe_allow_html=True)
+            with col_doc_del:
+                if st.button("❌", key=f"del_local_{nombre_doc}"):
+                    st.session_state.archivos_locales.pop(nombre_doc, None)
+                    st.rerun()
+                    
+    if hay_contenido:
         st.markdown(" ")
         if st.button("Limpiar Todo el Expediente", key="limpiar_exp"):
             st.session_state.expediente = {}
+            st.session_state.archivos_locales = {}
             st.session_state.historial_chat = []
             st.session_state.resultados_busqueda = []
             st.rerun()
     else:
-        st.info("Tu expediente está vacío. Realiza una consulta a la izquierda e integra leyes para construir tu expediente de estudio.")
+        st.info("Tu expediente está vacío. Busca leyes a la izquierda o arrastra tus archivos PDF/Word aquí arriba.")
 
 # =====================================================================
-# 6. ENTORNO DE CONSULTA INTELIGENTE (CHATEAR CON EL EXPEDIENTE)
+# 6. ENTORNO DE CONSULTA INTELIGENTE (CHATEAR CON EL EXPEDIENTE MULTIDISCIPLINARIO)
 # =====================================================================
 st.markdown("<br>", unsafe_allow_html=True)
 st.subheader("🤖 Asistente Jurídico Experto (Análisis RAG Unificado)")
 
-if not st.session_state.expediente:
-    st.warning("⚠️ Integra al menos una normatividad a tu expediente virtual superior para habilitar el consultor de Inteligencia Artificial.")
+if not st.session_state.expediente and not st.session_state.archivos_locales:
+    st.warning("⚠️ Integra al menos una normatividad de la SCJN o un archivo local a tu expediente superior para habilitar el consultor de Inteligencia Artificial.")
 elif not GEMINI_API_KEY:
-    st.error("🔑 Falta la clave de API de Gemini en los Secrets de tu Streamlit Cloud con el nombre 'GEMINI_API_KEY'.")
+    st.error("🔑 Falta la clave de API de Gemini en los Secrets de tu Streamlit Cloud.")
 else:
-    st.success(f"Ecosistema integrado con éxito. El consultor cruzará información de las {len(st.session_state.expediente)} leyes agregadas.")
+    total_docs = len(st.session_state.expediente) + len(st.session_state.archivos_locales)
+    st.success(f"Ecosistema integrado con éxito. El consultor cruzará información de los {total_docs} documentos agregados.")
     
     # Renderizar el historial acumulado en pantalla
     for mensaje in st.session_state.historial_chat:
@@ -201,37 +245,43 @@ else:
         
         with st.chat_message("assistant"):
             respuesta_placeholder = st.empty()
-            with st.spinner("Descargando ordenamientos legales e hilando interpretación jurídica..."):
+            with st.spinner("Compilando documentos e hilando interpretación jurídica cruzada..."):
                 
-                # 1. Mapeo y descarga dinámica en texto plano
+                # 1. Mapeo y descarga dinámica de leyes de la SCJN
                 texto_total_contexto = ""
                 for nombre_ley, url_ley in st.session_state.expediente.items():
-                    texto_total_contexto += f"\n\n=== ORDENAMIENTO: {nombre_ley} ===\n"
+                    texto_total_contexto += f"\n\n=== ORDENAMIENTO (SCJN): {nombre_ley} ===\n"
                     try:
                         if ".docx" in url_ley or "wfDescarga" in url_ley or "aspx" in url_ley:
                             res = requests.get(url_ley, timeout=15)
                             doc = Document(BytesIO(res.content))
                             texto_ley = "\n".join([p.text for p in doc.paragraphs])
-                            texto_total_contexto += texto_ley[:150000]  # Control inteligente de límites de token por archivo
+                            texto_total_contexto += texto_ley[:150000]
                         else:
                             texto_total_contexto += f"Contenido indexado mediante referencia oficial: {url_ley}\n"
-                    except Exception as e_descarga:
-                        texto_total_contexto += f"(Nota: Contenido procesado mediante enlace de referencia documental debido a restricción de descarga)\n"
+                    except Exception:
+                        texto_total_contexto += f"(Nota: Contenido procesado mediante enlace de referencia debido a restricción de descarga directa)\n"
                 
-                # 2. Ingeniería de Prompts Jurídicos Especializados
+                # 2. Sumar el texto de los archivos locales cargados
+                for nombre_doc, texto_doc in st.session_state.archivos_locales.items():
+                    texto_total_contexto += f"\n\n=== DOCUMENTO LOCAL USER: {nombre_doc} ===\n"
+                    texto_total_contexto += texto_doc[:150000]
+                
+                # 3. Ingeniería de Prompts Jurídicos Especializados
                 prompt_sistema = (
                     "Eres un consultor jurídico de la Suprema Corte de Justicia de la Nación y un abogado experto "
                     "en el marco legal y electoral de los Estados Unidos Mexicanos. Tu tarea es responder con un lenguaje altamente "
                     "formal, técnico, pragmático y rigurosamente estructurado.\n\n"
                     "Instrucciones de actuación:\n"
-                    "1. Responde a la consulta del usuario basándote de forma estricta y prioritaria en los textos de las normatividades vigentes adjuntas.\n"
-                    "2. Cruza e interrelaciona los ordenamientos disponibles en el contexto si la pregunta lo amerita.\n"
-                    "3. Cita siempre de manera explícita el artículo, capítulo o apartado aplicable de cada norma para fundamentar tu dicho.\n\n"
-                    f"CONTEXTO DOCUMENTAL DE LAS LEYES SELECCIONADAS:\n{texto_total_contexto}\n\n"
+                    "1. Responde a la consulta del usuario basándote de forma estricta y prioritaria en el contexto documental adjunto, "
+                    "el cual incluye tanto leyes oficiales de la SCJN como documentos personales provistos por el usuario.\n"
+                    "2. Realiza un cruce de información minucioso: analiza cómo interactúan los documentos locales con el marco jurídico oficial.\n"
+                    "3. Cita siempre de manera explícita el artículo, capítulo, apartado o el nombre del documento de origen para fundamentar tu dicho.\n\n"
+                    f"CONTEXTO DOCUMENTAL UNIFICADO:\n{texto_total_contexto}\n\n"
                     f"PREGUNTA DEL ABOGADO:\n{pregunta_usuario}"
                 )
                 
-                # 3. Petición HTTPS Nativa a la API de Google (Compatible con google-generativeai y google-genai)
+                # 4. Petición HTTPS Nativa a la API de Google Gemini 1.5 Flash
                 try:
                     url_api = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
                     headers = {"Content-Type": "application/json"}
@@ -241,7 +291,7 @@ else:
                         }]
                     }
                     
-                    response = requests.post(url_api, json=payload, headers=headers, timeout=40)
+                    response = requests.post(url_api, json=payload, headers=headers, timeout=45)
                     res_json = response.json()
                     respuesta_ia = res_json['candidates'][0]['content']['parts'][0]['text']
                 except Exception as e_api:
