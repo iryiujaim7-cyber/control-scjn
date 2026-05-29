@@ -1,3 +1,2 @@
-```text
-   chromium
-   chromium-driver
+chromium
+chromium-driver
