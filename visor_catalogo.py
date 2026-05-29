@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 import requests
+import json
 from docx import Document
 from pypdf import PdfReader
 from io import BytesIO
@@ -18,21 +19,19 @@ st.set_page_config(
     layout="wide"
 )
 
-# Inicializar cliente de Gemini desde Secrets de forma segura
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 
-# Inicializar estados de la sesión estables para que no pierdan información entre recargas
 if "expediente" not in st.session_state:
-    st.session_state.expediente = {}  # {Nombre: Url_Descarga}
+    st.session_state.expediente = {}  
 if "archivos_locales" not in st.session_state:
-    st.session_state.archivos_locales = {}  # {Nombre: Texto_Extraido}
+    st.session_state.archivos_locales = {}  
 if "historial_chat" not in st.session_state:
     st.session_state.historial_chat = []
 if "resultados_busqueda" not in st.session_state:
     st.session_state.resultados_busqueda = []
 
 # =====================================================================
-# 2. INYECCIÓN DE IDENTIDAD VISUAL CORPORATIVA (MÁXIMA COMPRESIÓN)
+# 2. INYECCIÓN DE IDENTIDAD VISUAL CORPORATIVA
 # =====================================================================
 st.markdown(f"""
     <style>
@@ -68,9 +67,6 @@ st.markdown(f"""
         font-family: 'Georgia', serif;
         font-weight: bold;
     }}
-    p, span, label, div {{
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    }}
     /* Estilo para los botones principales y de añadir */
     div.stButton > button {{
         background-color: #1A2E40;
@@ -86,7 +82,6 @@ st.markdown(f"""
         color: #FFFFFF;
         border-color: #C5A059;
     }}
-    /* Botón de limpieza */
     div.stButton > button[key="limpiar_exp"] {{
         background-color: #E2E8F0 !important;
         color: #4A5568 !important;
@@ -129,17 +124,13 @@ with col_izq:
         else:
             st.warning("Por favor ingresa un concepto válido para buscar.")
 
-    # Desplegar lista de resultados de la SCJN
     if st.session_state.resultados_busqueda:
         st.markdown("##### Resultados encontrados. Añade los elementos necesarios a tu espacio de trabajo:")
-        
         for idx, item in enumerate(st.session_state.resultados_busqueda):
             col_info, col_btn = st.columns([4, 1.2])
-            
             with col_info:
                 st.markdown(f"🏛️ **{item['Normatividad']}**", unsafe_allow_html=True)
                 st.markdown(f"📅 *Última actualización:* <span style='color:#C5A059; font-weight:bold;'>{item['Última actualización']}</span>", unsafe_allow_html=True)
-            
             with col_btn:
                 if item["Normatividad"] in st.session_state.expediente:
                     st.markdown("<p style='color:#C5A059; font-weight:bold; text-align:center; margin-top:10px;'>Agregada ✓</p>", unsafe_allow_html=True)
@@ -158,7 +149,6 @@ with col_der:
     st.markdown("🌐 **Cargar documentos locales:**")
     archivos_subidos = st.file_uploader("Sube tus propios archivos para incluirlos en el cruce de información:", type=["pdf", "docx"], accept_multiple_files=True, label_visibility="collapsed")
     
-    # Procesamiento persistente indexado en el state de la sesión para evitar pérdidas
     if archivos_subidos:
         for archivo in archivos_subidos:
             if archivo.name not in st.session_state.archivos_locales:
@@ -177,14 +167,12 @@ with col_der:
                 except Exception as e_archivo:
                     st.error(f"Error procesando {archivo.name}: {str(e_archivo)}")
 
-    # Sincronizar remoción de archivos desde el control nativo de Streamlit
     if archivos_subidos is not None:
         nombres_actuales = [a.name for a in archivos_subidos]
         for nombre_guardado in list(st.session_state.archivos_locales.keys()):
             if nombre_guardado not in nombres_actuales:
                 st.session_state.archivos_locales.pop(nombre_guardado, None)
 
-    # Listar las leyes agregadas desde el buscador institucional
     if st.session_state.expediente:
         st.markdown("<p style='font-weight: bold; margin-bottom: 5px;'>Leyes institucionales añadidas (SCJN):</p>", unsafe_allow_html=True)
         for ley in list(st.session_state.expediente.keys()):
@@ -196,7 +184,6 @@ with col_der:
                     st.session_state.expediente.pop(ley, None)
                     st.rerun()
 
-    # Botón de limpieza global
     if st.session_state.expediente or st.session_state.archivos_locales:
         st.markdown(" ")
         if st.button("Limpiar Todo el Expediente", key="limpiar_exp"):
@@ -207,7 +194,7 @@ with col_der:
             st.rerun()
 
 # =====================================================================
-# 6. ENTORNO DE CONSULTA INTELIGENTE (NOTEBOOKLM CON TESTIGO VISUAL)
+# 6. ENTORNO DE CONSULTA INTELIGENTE (ESTILO NOTEBOOKLM + ESCAPADO JSON)
 # =====================================================================
 st.markdown("<br>", unsafe_allow_html=True)
 st.subheader("🤖 Asistente Jurídico Experto (Análisis RAG Unificado)")
@@ -220,7 +207,6 @@ else:
     total_docs = len(st.session_state.expediente) + len(st.session_state.archivos_locales)
     st.success(f"Ecosistema integrado con éxito al estilo NotebookLM. Analizando {total_docs} documentos en total.")
     
-    # Desplegar el historial persistente en pantalla
     for mensaje in st.session_state.historial_chat:
         with st.chat_message(mensaje["role"]):
             st.markdown(mensaje["content"])
@@ -229,7 +215,6 @@ else:
     
     if pregunta_usuario := st.chat_input("Plantea tu duda (El sistema responderá basándose estrictamente en tus documentos cargados)..."):
         
-        # Insertar pregunta de inmediato
         with st.chat_message("user"):
             st.markdown(pregunta_usuario)
         st.session_state.historial_chat.append({"role": "user", "content": pregunta_usuario})
@@ -237,13 +222,11 @@ else:
         with st.chat_message("assistant"):
             respuesta_placeholder = st.empty()
             
-            # --- INCORPORACIÓN DEL TESTIGO VISUAL DE PASOS (ESTILO NOTEBOOKLM) ---
             with st.status("🧠 Analizando expediente unificado...", expanded=True) as status:
-                
                 status.write("⏬ Cargando y estructurando las leyes del expediente virtual...")
                 texto_total_contexto = ""
                 
-                # Procesar leyes de la SCJN
+                # Cargar leyes SCJN
                 for nombre_ley, url_ley in st.session_state.expediente.items():
                     try:
                         if ".docx" in url_ley or "wfDescarga" in url_ley or "aspx" in url_ley:
@@ -254,11 +237,13 @@ else:
                     except Exception:
                         pass
                 
-                # Procesar y blindar documentos locales
-                status.write("📖 Indexando los textos de tus archivos locales cargados...")
+                # Cargar y sanitizar archivos locales
+                status.write("📖 Indexando y sanitizando los textos de tus archivos locales cargados...")
                 for nombre_doc, texto_doc in st.session_state.archivos_locales.items():
-                    status.write(f" -> Procesando contenido analítico de: `{nombre_doc}`")
-                    texto_total_contexto += f"\n\n=== ARCHIVO CARGADO: {nombre_doc} ===\n" + texto_doc[:150000]
+                    status.write(f" -> Procesando de forma segura: `{nombre_doc}`")
+                    # Reemplazar caracteres problemáticos comunes para asegurar estabilidad en JSON
+                    texto_limpio = texto_doc.replace('"', '\\"').replace('\r', '')
+                    texto_total_contexto += f"\n\n=== ARCHIVO CARGADO: {nombre_doc} ===\n" + texto_limpio[:150000]
                 
                 status.write("🧠 Sincronizando modelo analítico cerrado de Gemini 1.5 Flash...")
                 prompt_sistema = (
@@ -276,26 +261,32 @@ else:
                 
                 status.write("⚖️ Formulando fundamentación y construyendo respuesta jurídica...")
                 
-                # Ejecutar llamada HTTP directa hacia el motor analítico de Google
                 try:
                     url_api = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
                     headers = {"Content-Type": "application/json"}
+                    
+                    # Construcción ultra segura del payload usando la librería json nativa para evitar malformaciones
                     payload = {
                         "contents": [{
                             "parts": [{"text": prompt_sistema}]
                         }]
                     }
                     
-                    response = requests.post(url_api, json=payload, headers=headers, timeout=45)
+                    response = requests.post(url_api, data=json.dumps(payload), headers=headers, timeout=45)
                     res_json = response.json()
-                    respuesta_ia = res_json['candidates'][0]['content']['parts'][0]['text']
                     
-                    # Marcar éxito en el testigo visual
-                    status.update(label="✅ Análisis completado con éxito", state="complete", expanded=False)
+                    if 'candidates' in res_json:
+                        respuesta_ia = res_json['candidates'][0]['content']['parts'][0]['text']
+                        status.update(label="✅ Análisis completado con éxito", state="complete", expanded=False)
+                    else:
+                        # Si la API responde con un error de cuota o restricción estructurada
+                        msg_err = res_json.get('error', {}).get('message', 'Estructura de datos rechazada por el servidor.')
+                        respuesta_ia = f"El motor de Google no pudo procesar el volumen de texto. Detalle técnico: {msg_err}"
+                        status.update(label="❌ Error en los parámetros del documento", state="error", expanded=False)
+                        
                 except Exception as e_api:
                     respuesta_ia = f"Error de comunicación con el núcleo analítico: {str(e_api)}"
-                    status.update(label="❌ Error en el proceso analítico", state="error", expanded=False)
+                    status.update(label="❌ Error de conexión de red", state="error", expanded=False)
             
-            # Pintar la respuesta final en el chat
             respuesta_placeholder.markdown(respuesta_ia)
             st.session_state.historial_chat.append({"role": "assistant", "content": respuesta_ia})
