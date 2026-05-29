@@ -194,7 +194,7 @@ with col_der:
                     st.session_state.expediente.pop(ley, None)
                     st.rerun()
 
-    # Desplegar archivos locales cargados
+    # Desplegar archivos locales cargados (CORREGIDO CON unsafe_allow_html=True)
     if st.session_state.archivos_locales:
         hay_contenido = True
         for nombre_doc in list(st.session_state.archivos_locales.keys()):
@@ -218,7 +218,7 @@ with col_der:
         st.info("Tu expediente está vacío. Busca leyes a la izquierda o arrastra tus archivos PDF/Word aquí arriba.")
 
 # =====================================================================
-# 6. ENTORNO DE CONSULTA INTELIGENTE (CHATEAR CON EL EXPEDIENTE MULTIDISCIPLINARIO)
+# 6. ENTORNO DE CONSULTA INTELIGENTE (CHATEAR CON EL EXPEDIENTE)
 # =====================================================================
 st.markdown("<br>", unsafe_allow_html=True)
 st.subheader("🤖 Asistente Jurídico Experto (Análisis RAG Unificado)")
