@@ -3,4 +3,4 @@ pandas
 openpyxl
 selenium
 python-docx
-google-genai
+google-generativeai
