@@ -21,7 +21,7 @@ st.set_page_config(
 # Inicializar cliente de Gemini desde Secrets de forma segura
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 
-# Inicializar estados de la sesión para el expediente virtual, archivos locales y chat
+# Inicializar estados de la sesión estables para que no pierdan información entre recargas
 if "expediente" not in st.session_state:
     st.session_state.expediente = {}  # {Nombre: Url_Descarga}
 if "archivos_locales" not in st.session_state:
@@ -155,11 +155,10 @@ with col_izq:
 with col_der:
     st.subheader("📂 Tu Expediente Virtual de Análisis")
     
-    # Receptor interactivo de archivos locales (.pdf y .docx)
     st.markdown("🌐 **Cargar documentos locales:**")
     archivos_subidos = st.file_uploader("Sube tus propios archivos para incluirlos en el cruce de información:", type=["pdf", "docx"], accept_multiple_files=True, label_visibility="collapsed")
     
-    # Procesar archivos arrastrados de forma inmediata a la sesión
+    # Procesamiento persistente indexado en el state de la sesión para evitar pérdidas
     if archivos_subidos:
         for archivo in archivos_subidos:
             if archivo.name not in st.session_state.archivos_locales:
@@ -178,14 +177,14 @@ with col_der:
                 except Exception as e_archivo:
                     st.error(f"Error procesando {archivo.name}: {str(e_archivo)}")
 
-    # Sincronizar y depurar elementos removidos por el usuario en el componente nativo
+    # Sincronizar remoción de archivos desde el control nativo de Streamlit
     if archivos_subidos is not None:
         nombres_actuales = [a.name for a in archivos_subidos]
         for nombre_guardado in list(st.session_state.archivos_locales.keys()):
             if nombre_guardado not in nombres_actuales:
                 st.session_state.archivos_locales.pop(nombre_guardado, None)
 
-    # Mostrar de forma compacta el estado de las leyes SCJN añadidas
+    # Listar las leyes agregadas desde el buscador institucional
     if st.session_state.expediente:
         st.markdown("<p style='font-weight: bold; margin-bottom: 5px;'>Leyes institucionales añadidas (SCJN):</p>", unsafe_allow_html=True)
         for ley in list(st.session_state.expediente.keys()):
@@ -197,7 +196,7 @@ with col_der:
                     st.session_state.expediente.pop(ley, None)
                     st.rerun()
 
-    # Botón global de reinicio si hay cualquier tipo de documento cargado
+    # Botón de limpieza global
     if st.session_state.expediente or st.session_state.archivos_locales:
         st.markdown(" ")
         if st.button("Limpiar Todo el Expediente", key="limpiar_exp"):
@@ -208,7 +207,7 @@ with col_der:
             st.rerun()
 
 # =====================================================================
-# 6. ENTORNO DE CONSULTA INTELIGENTE AL ESTILO NOTEBOOKLM
+# 6. ENTORNO DE CONSULTA INTELIGENTE (NOTEBOOKLM CON TESTIGO VISUAL)
 # =====================================================================
 st.markdown("<br>", unsafe_allow_html=True)
 st.subheader("🤖 Asistente Jurídico Experto (Análisis RAG Unificado)")
@@ -221,57 +220,63 @@ else:
     total_docs = len(st.session_state.expediente) + len(st.session_state.archivos_locales)
     st.success(f"Ecosistema integrado con éxito al estilo NotebookLM. Analizando {total_docs} documentos en total.")
     
-    # Mostrar el historial de conversación en la pantalla
+    # Desplegar el historial persistente en pantalla
     for mensaje in st.session_state.historial_chat:
         with st.chat_message(mensaje["role"]):
             st.markdown(mensaje["content"])
             
-    # CAMPO DE PREGUNTA PERSONALIZADA SOLICITADO
     st.markdown("### 💬 Haz preguntas sobre estas normatividades")
     
     if pregunta_usuario := st.chat_input("Plantea tu duda (El sistema responderá basándose estrictamente en tus documentos cargados)..."):
         
+        # Insertar pregunta de inmediato
         with st.chat_message("user"):
             st.markdown(pregunta_usuario)
         st.session_state.historial_chat.append({"role": "user", "content": pregunta_usuario})
         
         with st.chat_message("assistant"):
             respuesta_placeholder = st.empty()
-            with st.spinner("Analizando exclusivamente los textos del expediente unificado..."):
+            
+            # --- INCORPORACIÓN DEL TESTIGO VISUAL DE PASOS (ESTILO NOTEBOOKLM) ---
+            with st.status("🧠 Analizando expediente unificado...", expanded=True) as status:
                 
-                # 1. Recuperar textos de las leyes SCJN
+                status.write("⏬ Cargando y estructurando las leyes del expediente virtual...")
                 texto_total_contexto = ""
+                
+                # Procesar leyes de la SCJN
                 for nombre_ley, url_ley in st.session_state.expediente.items():
-                    texto_total_contexto += f"\n\n=== ORDENAMIENTO OFICIAL (SCJN): {nombre_ley} ===\n"
                     try:
                         if ".docx" in url_ley or "wfDescarga" in url_ley or "aspx" in url_ley:
                             res = requests.get(url_ley, timeout=15)
                             doc = Document(BytesIO(res.content))
                             texto_ley = "\n".join([p.text for p in doc.paragraphs])
-                            texto_total_contexto += texto_ley[:150000]
+                            texto_total_contexto += f"\n\n=== ORDENAMIENTO OFICIAL (SCJN): {nombre_ley} ===\n" + texto_ley[:150000]
                     except Exception:
                         pass
                 
-                # 2. Recuperar textos de los archivos locales del usuario
+                # Procesar y blindar documentos locales
+                status.write("📖 Indexando los textos de tus archivos locales cargados...")
                 for nombre_doc, texto_doc in st.session_state.archivos_locales.items():
-                    texto_total_contexto += f"\n\n=== ARCHIVO CARGADO: {nombre_doc} ===\n"
-                    texto_total_contexto += texto_doc[:150000]
+                    status.write(f" -> Procesando contenido analítico de: `{nombre_doc}`")
+                    texto_total_contexto += f"\n\n=== ARCHIVO CARGADO: {nombre_doc} ===\n" + texto_doc[:150000]
                 
-                # 3. Restricción absoluta del prompt al estilo NotebookLM
+                status.write("🧠 Sincronizando modelo analítico cerrado de Gemini 1.5 Flash...")
                 prompt_sistema = (
-                    "Actúa estrictamente como un sistema experto de análisis documental cerrado (estilo Google NotebookLM). "
-                    "Tu única fuente de verdad son los documentos provistos en el bloque de CONTEXTO DOCUMENTAL UNIFICADO. "
-                    "Debes seguir estas reglas de forma obligatoria:\n"
-                    "1. Responde a la pregunta basándote ÚNICAMENTE en el texto de los documentos cargados.\n"
-                    "2. Si la respuesta a la pregunta no viene explícitamente en los documentos, debes decir exactamente lo siguiente: "
-                    "'Lo siento, la información solicitada no se encuentra disponible en las normatividades ni en los documentos cargados en el expediente.' "
-                    "No intentes inventar, asumir o usar conocimientos externos ajenos al texto provisto.\n"
-                    "3. Mantén un tono formal, técnico, directo y estructurado como abogado experto. Cita la norma o el documento de origen al responder.\n\n"
+                    "Actúa estrictamente como un sistema experto de análisis documental cerrado (estilo Google NotebookLM).\n"
+                    "Tu única fuente de verdad legítima son los documentos provistos en el bloque de CONTEXTO DOCUMENTAL UNIFICADO.\n\n"
+                    "Reglas obligatorias de comportamiento:\n"
+                    "1. Responde a la pregunta planteada basándote ÚNICAMENTE en la información explícita de los documentos.\n"
+                    "2. Si la respuesta no se encuentra plasmada en los textos, debes contestar de manera exacta y literal:\n"
+                    "'Lo siento, la información solicitada no se encuentra disponible en las normatividades ni en los documentos cargados en el expediente.'\n"
+                    "No inventes, asumas, presupongas ni utilices conocimientos externos al contexto bajo ninguna circunstancia.\n"
+                    "3. Usa un lenguaje formal, técnico y estructurado. Cita siempre el artículo o documento del que extrajiste el argumento.\n\n"
                     f"CONTEXTO DOCUMENTAL UNIFICADO:\n{texto_total_contexto}\n\n"
-                    f"PREGUNTA:\n{pregunta_usuario}"
+                    f"PREGUNTA DEL USUARIO:\n{pregunta_usuario}"
                 )
                 
-                # 4. Envío nativo mediante petición web hacia Google Gemini 1.5 Flash
+                status.write("⚖️ Formulando fundamentación y construyendo respuesta jurídica...")
+                
+                # Ejecutar llamada HTTP directa hacia el motor analítico de Google
                 try:
                     url_api = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
                     headers = {"Content-Type": "application/json"}
@@ -284,9 +289,13 @@ else:
                     response = requests.post(url_api, json=payload, headers=headers, timeout=45)
                     res_json = response.json()
                     respuesta_ia = res_json['candidates'][0]['content']['parts'][0]['text']
+                    
+                    # Marcar éxito en el testigo visual
+                    status.update(label="✅ Análisis completado con éxito", state="complete", expanded=False)
                 except Exception as e_api:
                     respuesta_ia = f"Error de comunicación con el núcleo analítico: {str(e_api)}"
-                
-                # Renderizar la respuesta final en el tablero
-                respuesta_placeholder.markdown(respuesta_ia)
-                st.session_state.historial_chat.append({"role": "assistant", "content": respuesta_ia})
+                    status.update(label="❌ Error en el proceso analítico", state="error", expanded=False)
+            
+            # Pintar la respuesta final en el chat
+            respuesta_placeholder.markdown(respuesta_ia)
+            st.session_state.historial_chat.append({"role": "assistant", "content": respuesta_ia})
