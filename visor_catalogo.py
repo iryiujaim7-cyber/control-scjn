@@ -11,26 +11,34 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. INYECCIÓN DE IDENTIDAD VISUAL CORPORATIVA (CSS PERSONALIZADO CORREGIDO)
+# 2. INYECCIÓN DE IDENTIDAD VISUAL CORPORATIVA (COMPRESIÓN DE ESPACIOS)
 st.markdown(f"""
     <style>
-    /* Fondo principal blanco de la aplicación */
+    /* Fondo principal de la aplicación */
     .stApp {{
         background-color: #F8F9FA;
     }}
     
-    /* Reducción drástica del espacio en blanco superior general de Streamlit */
+    /* Reducción del espacio en blanco superior general de la página */
     .block-container {{
         padding-top: 1rem !important;
         padding-bottom: 1rem !important;
     }}
     
-    /* Títulos principales en Azul Marino Profundo */
-    h1, h2, h3 {{
+    /* Títulos principales en Azul Marino Profundo con tipografía clásica */
+    h1 {{
         color: #1A2E40 !important;
         font-family: 'Georgia', serif;
         font-weight: bold;
         text-align: center;
+        margin-top: -15px !important; /* Margen negativo para pegar el título al logo */
+        margin-bottom: 0.2rem !important;
+    }}
+    
+    h2, h3 {{
+        color: #1A2E40 !important;
+        font-family: 'Georgia', serif;
+        font-weight: bold;
     }}
     
     /* Textos secundarios y subtítulos en Gris Oxford */
@@ -39,17 +47,22 @@ st.markdown(f"""
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
     }}
 
-    /* Contenedor del Logo optimizado para eliminar espacios blancos innecesarios */
+    /* Contenedor del Logo compacto para eliminar márgenes residuales */
     .logo-container {{
         display: flex;
         justify-content: center;
         align-items: center;
-        padding: 0.5rem 0 0.5rem 0; /* Relleno mínimo */
-        margin-top: 0px;
-        margin-bottom: 0px;
+        margin-bottom: 0px !important;
+        padding-bottom: 0px !important;
+    }}
+    
+    /* Forzar a la imagen de Streamlit a no generar espacio abajo */
+    [data-testid="stImage"] {{
+        margin-bottom: 0px !important;
+        padding-bottom: 0px !important;
     }}
 
-    /* Botón de acción en Azul Marino con texto blanco */
+    /* Botón de acción en Azul Marino */
     div.stButton > button:first-child {{
         background-color: #1A2E40;
         color: #FFFFFF;
@@ -88,7 +101,7 @@ st.markdown(f"""
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
     }}
     
-    /* Estilo de los enlaces (Descargar última versión) en Dorado Corporativo */
+    /* Estilo de los enlaces en Dorado Corporativo */
     a {{
         color: #C5A059 !important;
         text-decoration: none !important;
@@ -101,16 +114,15 @@ st.markdown(f"""
     </style>
     """, unsafe_allow_html=True)
 
-# 3. ENCABEZADO PRESIDENCIAL CON ESPACIOS REDUCIDOS
-# Ajustamos las columnas laterales para dar un ancho óptimo al logo sin dejar huecos vacíos
+# 3. ENCABEZADO COMPACTO CENTRADO
 _, col_center_logo, _ = st.columns([1.5, 1, 1.5])
 with col_center_logo:
     st.markdown('<div class="logo-container">', unsafe_allow_html=True)
     st.image(LOGO_URL, use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-# Título y subtítulos con márgenes estilizados y compactos
-st.markdown("<h1 style='font-size: 2.3rem; margin-top: 0px; margin-bottom: 0.2rem;'>Catálogo y Control de Normatividades</h1>", unsafe_allow_html=True)
+# Estructura de títulos sin espacios intermedios vacíos
+st.markdown("<h1>Catálogo y Control de Normatividades</h1>", unsafe_allow_html=True)
 st.markdown("<h4 style='text-align: center; font-weight: normal; margin-top: 0px; margin-bottom: 1.5rem; font-size: 1.1rem;'>En la siguiente tabla puedes consultar las últimas actualizaciones de diversas normatividades</h4>", unsafe_allow_html=True)
 st.markdown("<hr style='border-top: 1px solid #E2E8F0; margin-top: 0px; margin-bottom: 1.5rem;'>", unsafe_allow_html=True)
 
@@ -118,7 +130,6 @@ st.markdown("<hr style='border-top: 1px solid #E2E8F0; margin-top: 0px; margin-b
 EXCEL_PATH = "registro_normatividades.xlsx"
 DOWNLOAD_DIR = "./descargas_leyes"
 
-# Verificar existencia de la matriz de datos
 if os.path.exists(EXCEL_PATH):
     df = pd.read_excel(EXCEL_PATH)
     
@@ -133,7 +144,7 @@ if os.path.exists(EXCEL_PATH):
     st.markdown("<br>", unsafe_allow_html=True)
     
     # --- CUADRO COMPARATIVO INTERACTIVO ARMÓNICO ---
-    st.markdown("<h3 style='text-align: left; font-size: 1.4rem; margin-bottom: 0.8rem; font-family: Georgia, serif;'>📋 Cuadro Comparativo de Actualizaciones</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: left; font-size: 1.4rem; margin-bottom: 0.8rem;'>📋 Cuadro Comparativo de Actualizaciones</h3>", unsafe_allow_html=True)
     
     st.dataframe(
         df, 
