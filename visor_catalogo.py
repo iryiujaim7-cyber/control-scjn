@@ -22,7 +22,6 @@ st.set_page_config(
 
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 
-# Inicializar estados de la sesión estables
 if "expediente" not in st.session_state:
     st.session_state.expediente = {}  
 if "archivos_locales" not in st.session_state:
@@ -33,7 +32,7 @@ if "resultados_busqueda" not in st.session_state:
     st.session_state.resultados_busqueda = []
 
 # =====================================================================
-# 2. INYECCIÓN DE IDENTIDAD VISUAL CORPORATIVA
+# 2. INYECCIÓN DE IDENTIDAD VISUAL Y CORRECCIÓN DE CAJA DE CHAT
 # =====================================================================
 st.markdown(f"""
     <style>
@@ -52,7 +51,6 @@ st.markdown(f"""
     .header-block img {{
         display: block;
         margin: 0 auto !important;
-        padding: 0 !important;
         max-width: 240px;
         height: auto;
     }}
@@ -69,6 +67,8 @@ st.markdown(f"""
         font-family: 'Georgia', serif;
         font-weight: bold;
     }}
+    
+    /* Botones principales */
     div.stButton > button {{
         background-color: #1A2E40;
         color: #FFFFFF;
@@ -91,6 +91,29 @@ st.markdown(f"""
     div.stButton > button[key="limpiar_exp"]:hover {{
         background-color: #CBD5E1 !important;
         color: #1A2E40 !important;
+    }}
+
+    /* ===================================================
+       FORZAR ESTILO LUMINOSO Y ELEGANTE EN LA CAJA DE CHAT
+       =================================================== */
+    div[data-testid="stChatInput"] {{
+        background-color: #FFFFFF !important;
+        border: 2px solid #C5A059 !important; /* Borde Bronce Corporativo */
+        border-radius: 12px !important;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.08) !important;
+        padding: 5px !important;
+    }}
+    div[data-testid="stChatInput"] textarea {{
+        color: #1A2E40 !important; /* Letra Azul Marino */
+        background-color: #FFFFFF !important;
+        font-weight: 500 !important;
+    }}
+    /* Modificar color del icono de enviar */
+    div[data-testid="stChatInput"] svg {{
+        fill: #C5A059 !important;
+    }}
+    div[data-testid="stChatInput"] textarea::placeholder {{
+        color: #718096 !important;
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -148,7 +171,6 @@ with col_der:
     st.markdown("🌐 **Cargar documentos locales:**")
     archivos_subidos = st.file_uploader("Sube tus propios archivos para incluirlos en el cruce de información:", type=["pdf", "docx"], accept_multiple_files=True, label_visibility="collapsed")
     
-    # Procesar archivos arrastrados extrayendo su texto limpio de inmediato
     if archivos_subidos:
         for archivo in archivos_subidos:
             if archivo.name not in st.session_state.archivos_locales:
@@ -194,7 +216,7 @@ with col_der:
             st.rerun()
 
 # =====================================================================
-# 6. ENTORNO DE CONSULTA INTELIGENTE (SDK OFICIAL - TEXTO PURO)
+# 6. ENTORNO DE CONSULTA INTELIGENTE (FILES API CON TEXTO EN TXT)
 # =====================================================================
 st.markdown("<br>", unsafe_allow_html=True)
 st.subheader("🤖 Asistente Jurídico Experto (Análisis RAG Unificado)")
@@ -222,13 +244,13 @@ else:
         with st.chat_message("assistant"):
             respuesta_placeholder = st.empty()
             
-            with st.status("🧠 Analizando expediente unificado con el motor de Google...", expanded=True) as status:
+            with st.status("🧠 Analizando expediente unificado con Google GenAI...", expanded=True) as status:
                 try:
                     client = genai.Client(api_key=GEMINI_API_KEY)
                     texto_total_unificado = ""
 
-                    # 1. Descargar e incorporar leyes de la SCJN
-                    status.write("⏬ Descargando ordenamientos en tiempo real desde la SCJN...")
+                    # 1. Unificar textos de SCJN
+                    status.write("⏬ Unificando textos de las leyes oficiales...")
                     for nombre_ley, url_ley in st.session_state.expediente.items():
                         try:
                             if ".docx" in url_ley or "wfDescarga" in url_ley or "aspx" in url_ley:
@@ -239,33 +261,38 @@ else:
                         except Exception:
                             pass
 
-                    # 2. Incorporar texto previamente extraído de los archivos locales
-                    status.write("📖 Compilando textos limpios de tus documentos locales...")
+                    # 2. Unificar textos locales
+                    status.write("📖 Añadiendo textos de documentos locales...")
                     for nombre_doc, texto_doc in st.session_state.archivos_locales.items():
-                        status.write(f" -> Integrando contenido extraído de: `{nombre_doc}`")
                         texto_total_unificado += f"\n\n=== ARCHIVO LOCAL CARGADO: {nombre_doc} ===\n{texto_doc}"
 
-                    # 3. Configuración estricta del prompt
-                    status.write("🧠 Transfiriendo expediente de forma segura a Gemini 1.5 Flash...")
+                    # 3. Crear archivo de texto plano temporal para evadir límites de carga
+                    status.write("🛡️ Encriptando contexto en archivo plano temporal...")
+                    temp_txt_path = "contexto_unificado_agora.txt"
+                    with open(temp_txt_path, "w", encoding="utf-8") as f:
+                        f.write(texto_total_unificado)
+
+                    # 4. Subir a Files API (Esto soporta millones de tokens sin colapsar)
+                    status.write("☁️ Subiendo expediente a la bóveda de análisis de Google...")
+                    archivo_nube = client.files.upload(file=temp_txt_path)
+
+                    # 5. Ejecutar la llamada con el archivo montado
+                    status.write("⚖️ Ejecutando análisis jurisprudencial...")
                     instrucciones_sistema = (
                         "Actúas estrictamente como un sistema experto de análisis documental cerrado (estilo Google NotebookLM).\n"
-                        "Tu única fuente de verdad legítima son los documentos provistos en el bloque de CONTEXTO DOCUMENTAL UNIFICADO.\n\n"
+                        "Tu única fuente de verdad legítima son los documentos provistos en el archivo adjunto.\n\n"
                         "Reglas obligatorias de comportamiento:\n"
-                        "1. Responde a la pregunta planteada basándote ÚNICAMENTE en la información explícita de los documentos.\n"
-                        "2. Si la respuesta no se encuentra plasmada en los textos, debes contestar de manera exacta y literal:\n"
+                        "1. Responde a la pregunta planteada basándote ÚNICAMENTE en la información de los documentos.\n"
+                        "2. Si la respuesta no se encuentra, debes contestar de manera exacta y literal:\n"
                         "'Lo siento, la información solicitada no se encuentra disponible en las normatividades ni en los documentos cargados en el expediente.'\n"
-                        "No inventes, asumas, presupongas ni utilices conocimientos externos bajo ninguna circunstancia.\n"
+                        "No inventes, asumas, ni utilices conocimientos externos.\n"
                         "3. Usa un lenguaje formal, técnico y estructurado. Cita siempre el artículo o documento del que extrajiste el argumento.\n\n"
-                        f"CONTEXTO DOCUMENTAL UNIFICADO:\n{texto_total_unificado}\n\n"
                         f"PREGUNTA DEL USUARIO:\n{pregunta_usuario}"
                     )
 
-                    status.write("⚖️ Estructurando análisis normativo y redactando dictamen...")
-                    
-                    # Llamada nativa mediante el SDK de Google (Inmune a errores de formato de archivo)
                     response = client.models.generate_content(
                         model='gemini-1.5-flash',
-                        contents=instrucciones_sistema,
+                        contents=[archivo_nube, instrucciones_sistema],
                         config=types.GenerateContentConfig(
                             temperature=0.0
                         )
@@ -274,10 +301,19 @@ else:
                     respuesta_ia = response.text
                     status.update(label="✅ Análisis completado con éxito", state="complete", expanded=False)
 
+                    # 6. Limpieza profunda
+                    try:
+                        client.files.delete(name=archivo_nube.name)
+                        os.remove(temp_txt_path)
+                    except Exception:
+                        pass
+
                 except Exception as e_general:
-                    respuesta_ia = f"El motor analítico detectó un inconveniente técnico de procesamiento. Detalle: {str(e_general)}"
-                    status.update(label="❌ Error de procesamiento del texto", state="error", expanded=False)
+                    respuesta_ia = f"El motor analítico experimentó un fallo al subir el contexto. Detalle técnico: {str(e_general)}"
+                    status.update(label="❌ Error de procesamiento en la nube", state="error", expanded=True)
+                    # Intentar limpiar archivo local en caso de error
+                    if os.path.exists("contexto_unificado_agora.txt"):
+                        os.remove("contexto_unificado_agora.txt")
             
-            # Imprimir en pantalla
             respuesta_placeholder.markdown(respuesta_ia)
             st.session_state.historial_chat.append({"role": "assistant", "content": respuesta_ia})
