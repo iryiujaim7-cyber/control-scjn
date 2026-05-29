@@ -1,0 +1,34 @@
+name: Actualizacion Automatica SCJN
+
+on:
+  schedule:
+    # Se ejecuta todos los días a las 06:00 AM hora del Centro de México (12:00 UTC)
+    - cron: '0 12 * * *'
+  workflow_dispatch: # Permite activar el script manualmente con un botón en GitHub
+
+jobs:
+  ejecutar-scraper:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Copiar repositorio actual
+      uses: actions/checkout@v3
+
+    - name: Configurar Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Instalar dependencias necesarias
+      run: |
+        pip install selenium pandas openpyxl
+
+    - name: Ejecutar Scraper de la SCJN
+      run: python actualizador_leyes.py
+
+    - name: Guardar base de datos y actualizar el tablero
+      run: |
+        git config --global user.name 'Bot Automatizador SCJN'
+        git config --global user.email 'bot@github.com'
+        git add registro_normatividades.xlsx descargas_leyes/
+        git commit -m "Automatizado: Base de datos actualizada por el servidor" || exit 0
+        git push
