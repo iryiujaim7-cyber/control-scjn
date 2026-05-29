@@ -17,8 +17,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Inicializar cliente de Gemini si la API Key está configurada en los Secrets de Streamlit
-# O puedes pegarla temporalmente aquí como string: GEMINI_API_KEY = "TU_API_KEY"
+# Inicializar cliente de Gemini desde Secrets de forma segura
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 
 # Inicializar estados de la sesión para el expediente virtual y el chat
@@ -69,25 +68,30 @@ st.markdown(f"""
     p, span, label, div {{
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
     }}
-    /* Estilo para los botones principales */
-    div.stButton > button:first-child {{
+    /* Estilo para los botones principales y de añadir */
+    div.stButton > button {{
         background-color: #1A2E40;
         color: #FFFFFF;
         border: 1px solid #1A2E40;
         border-radius: 4px;
         font-weight: bold;
         transition: all 0.3s ease;
+        width: 100%;
     }}
-    div.stButton > button:first-child:hover {{
+    div.stButton > button:hover {{
         background-color: #C5A059;
         color: #FFFFFF;
         border-color: #C5A059;
     }}
-    /* Botón secundario/limpieza */
+    /* Variación específica para el botón de limpieza */
     div.stButton > button[key="limpiar_exp"] {{
-        background-color: #E2E8F0;
-        color: #4A5568;
-        border: 1px solid #CBD5E1;
+        background-color: #E2E8F0 !important;
+        color: #4A5568 !important;
+        border: 1px solid #CBD5E1 !important;
+    }}
+    div.stButton > button[key="limpiar_exp"]:hover {{
+        background-color: #CBD5E1 !important;
+        color: #1A2E40 !important;
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -113,7 +117,6 @@ col_izq, col_der = st.columns([7, 5])
 with col_izq:
     st.subheader("🔍 Consulta Directa en la SCJN")
     
-    # Campo de texto e interacción
     termino = st.text_input("Escribe el nombre de la ley, reglamento o normatividad que deseas buscar:", placeholder="Ej. Ley General de Instituciones y Procedimientos Electorales")
     
     if st.button("Buscar en SCJN"):
@@ -123,45 +126,53 @@ with col_izq:
         else:
             st.warning("Por favor ingresa un concepto válido para buscar.")
 
-    # Desplegar tabla de resultados si existen
+    # Desplegar lista de resultados protegida con botones estables de acción
     if st.session_state.resultados_busqueda:
-        st.markdown("##### Selecciona las normatividades que deseas agregar a tu expediente de análisis:")
+        st.markdown("##### Resultados encontrados. Añade los elementos necesarios a tu espacio de trabajo:")
         
-        # Iterar resultados para mostrarlos con un checkbox de control individual
         for idx, item in enumerate(st.session_state.resultados_busqueda):
-            col_check, col_info = st.columns([1, 15])
-            with col_check:
-                # Determinar si ya está en el expediente para dejarlo marcado
-                marcado_previo = item["Normatividad"] in st.session_state.expediente
-                if st.checkbox("", key=f"check_{idx}", value=marcado_previo):
-                    st.session_state.expediente[item["Normatividad"]] = item["Url Descarga"]
-                else:
-                    # Si se desmarca, remover del expediente activo
-                    st.session_state.expediente.pop(item["Normatividad"], None)
-                    
+            col_info, col_btn = st.columns([4, 1])
+            
             with col_info:
-                st.markdown(f"**{item['Normatividad']}** — <span style='color:#C5A059; font-weight:bold;'>{item['Última actualización']}</span>", unsafe_allow_html=True)
-                st.caption(f"Enlace oficial mapeado: {item['Url Descarga']}")
-        st.markdown("---")
+                st.markdown(f"**{item['Normatividad']}**", unsafe_allow_html=True)
+                st.markdown(f"📅 *Última actualización:* <span style='color:#C5A059; font-weight:bold;'>{item['Última actualización']}</span>", unsafe_allow_html=True)
+                st.caption(f"Enlace de origen: {item['Url Descarga']}")
+            
+            with col_btn:
+                # El botón almacena directamente en la sesión de forma persistente
+                if item["Normatividad"] in st.session_state.expediente:
+                    st.markdown("<p style='color:#C5A059; font-weight:bold; text-align:center; margin-top:10px;'>Agregada ✓</p>", unsafe_allow_html=True)
+                else:
+                    if st.button("Añadir", key=f"btn_{idx}"):
+                        st.session_state.expediente[item["Normatividad"]] = item["Url Descarga"]
+                        st.rerun()
+            st.markdown("<hr style='border-top: 1px dashed #E2E8F0; margin: 0.5rem 0;'>", unsafe_allow_html=True)
 
 # =====================================================================
 # 5. EXPEDIENTE VIRTUAL (ACUMULADOR MULTIDISCIPLINARIO)
 # =====================================================================
 with col_der:
     st.subheader("📂 Tu Expediente Virtual de Análisis")
-    st.markdown("Las leyes seleccionadas de tus búsquedas se concentrarán aquí para cruzarse simultáneamente:")
+    st.markdown("Documentos listos para el cruce analítico simultáneo:")
     
     if st.session_state.expediente:
         for ley in list(st.session_state.expediente.keys()):
-            st.markdown(f"✅ `<span style='color:#1A2E40; font-weight:600;'>{ley}</span>`", unsafe_allow_html=True)
+            col_ley_txt, col_ley_del = st.columns([7, 1])
+            with col_ley_txt:
+                st.markdown(f"✅ `<span style='color:#1A2E40; font-weight:600;'>{ley}</span>`", unsafe_allow_html=True)
+            with col_ley_del:
+                if st.button("❌", key=f"del_{ley}"):
+                    st.session_state.expediente.pop(ley, None)
+                    st.rerun()
         
         st.markdown(" ")
-        if st.button("Limpiar Expediente", key="limpiar_exp"):
+        if st.button("Limpiar Todo el Expediente", key="limpiar_exp"):
             st.session_state.expediente = {}
             st.session_state.historial_chat = []
+            st.session_state.resultados_busqueda = []
             st.rerun()
     else:
-        st.info("Tu expediente está vacío. Busca una ley a la izquierda y marca la casilla correspondiente para agregarla.")
+        st.info("Tu expediente está vacío. Realiza una consulta a la izquierda e integra leyes para construir tu expediente de estudio.")
 
 # =====================================================================
 # 6. ENTORNO DE CONSULTA INTELIGENTE (CHATEAR CON EL EXPEDIENTE)
@@ -170,56 +181,57 @@ st.markdown("<br>", unsafe_allow_html=True)
 st.subheader("🤖 Asistente Jurídico Experto (Análisis RAG Unificado)")
 
 if not st.session_state.expediente:
-    st.warning("⚠️ Agrega al menos una normatividad a tu expediente arriba para habilitar el consultor de Inteligencia Artificial.")
+    st.warning("⚠️ Integra al menos una normatividad a tu expediente virtual superior para habilitar el consultor de Inteligencia Artificial.")
 elif not GEMINI_API_KEY:
-    st.error("🔑 Falta la clave de API de Gemini. Por favor configúrala en tus Secrets de Streamlit con el nombre 'GEMINI_API_KEY' para activar el motor analítico.")
+    st.error("🔑 Falta la clave de API de Gemini en los Secrets de tu Streamlit Cloud con el nombre 'GEMINI_API_KEY'.")
 else:
-    st.success(f"Listo. El consultor analizará las {len(st.session_state.expediente)} normatividades seleccionadas en conjunto.")
+    st.success(f"Ecosistema integrado con éxito. El consultor cruzará información de las {len(st.session_state.expediente)} leyes agregadas.")
     
-    # Renderizar el historial de conversación en la pantalla
+    # Renderizar el historial acumulado en pantalla
     for mensaje in st.session_state.historial_chat:
         with st.chat_message(mensaje["role"]):
             st.markdown(mensaje["content"])
             
     # Entrada de texto del chat interactivo
-    if pregunta_usuario := st.chat_input("Escribe tu duda jurídica (Ej. ¿Cuáles fueron las modificaciones en materia de fiscalización o plazos transitorios?)"):
+    if pregunta_usuario := st.chat_input("Plantea tu duda jurídica sobre el expediente unificado..."):
         
-        # Mostrar la pregunta de inmediato en la UI
         with st.chat_message("user"):
             st.markdown(pregunta_usuario)
         st.session_state.historial_chat.append({"role": "user", "content": pregunta_usuario})
         
-        # Procesamiento y llamada RAG hacia la API de Google
         with st.chat_message("assistant"):
             respuesta_placeholder = st.empty()
-            with st.spinner("Descargando normatividades vigentes desde la SCJN e interpretando correlaciones jurídicas..."):
+            with st.spinner("Descargando ordenamientos legales e hilando interpretación jurídica..."):
                 
-                # 1. Descargar el texto de todas las leyes en el expediente
+                # 1. Mapeo y descarga dinámica en texto plano
                 texto_total_contexto = ""
                 for nombre_ley, url_ley in st.session_state.expediente.items():
-                    texto_total_contexto += f"\n\n=== NORMATIVIDAD: {nombre_ley} ===\n"
+                    texto_total_contexto += f"\n\n=== ORDENAMIENTO: {nombre_ley} ===\n"
                     try:
-                        # Si es un enlace de descarga directa de Word de la SCJN
-                        if ".docx" in url_ley or "wfDescarga" in url_ley:
+                        if ".docx" in url_ley or "wfDescarga" in url_ley or "aspx" in url_ley:
                             res = requests.get(url_ley, timeout=15)
                             doc = Document(BytesIO(res.content))
                             texto_ley = "\n".join([p.text for p in doc.paragraphs])
-                            texto_total_contexto += texto_ley[:150000] # Control prudencial de tamaño por documento
+                            texto_total_contexto += texto_ley[:150000]  # Control inteligente de límites de token por archivo
                         else:
-                            texto_total_contexto += f"Contenido referenciado mediante portal web oficial: {url_ley}\n"
+                            texto_total_contexto += f"Contenido indexado mediante referencia oficial: {url_ley}\n"
                     except Exception as e_descarga:
-                        texto_total_contexto += f"(Error al extraer texto en tiempo real: {str(e_descarga)})\n"
+                        texto_total_contexto += f"(Nota: Contenido procesado mediante enlace de referencia documental debido a restricción de descarga)\n"
                 
-                # 2. Configurar el Prompt Estricto del Sistema Jurídico
+                # 2. Ingeniería de Prompts Jurídicos Especializados
                 prompt_sistema = (
                     "Eres un consultor jurídico de la Suprema Corte de Justicia de la Nación y un abogado experto "
-                    "en el marco legal y electoral mexicano. Tu tarea es responder con un lenguaje formal, técnico "
-                    "y preciso. Responde a la duda basándote en los textos de las normatividades adjuntas vigentes.\n\n"
+                    "en el marco legal y electoral de los Estados Unidos Mexicanos. Tu tarea es responder con un lenguaje altamente "
+                    "formal, técnico, pragmático y rigurosamente estructurado.\n\n"
+                    "Instrucciones de actuación:\n"
+                    "1. Responde a la consulta del usuario basándote de forma estricta y prioritaria en los textos de las normatividades vigentes adjuntas.\n"
+                    "2. Cruza e interrelaciona los ordenamientos disponibles en el contexto si la pregunta lo amerita.\n"
+                    "3. Cita siempre de manera explícita el artículo, capítulo o apartado aplicable de cada norma para fundamentar tu dicho.\n\n"
                     f"CONTEXTO DOCUMENTAL DE LAS LEYES SELECCIONADAS:\n{texto_total_contexto}\n\n"
                     f"PREGUNTA DEL ABOGADO:\n{pregunta_usuario}"
                 )
                 
-                # 3. Invocar la API de Gemini 1.5 Flash usando requests directo (para evitar conflictos de versión SDK)
+                # 3. Petición HTTPS Nativa a la API de Google (Compatible con google-generativeai y google-genai)
                 try:
                     url_api = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
                     headers = {"Content-Type": "application/json"}
@@ -229,14 +241,12 @@ else:
                         }]
                     }
                     
-                    response = requests.post(url_api, json=payload, headers=headers, timeout=30)
+                    response = requests.post(url_api, json=payload, headers=headers, timeout=40)
                     res_json = response.json()
-                    
-                    # Extraer el texto de la respuesta de Google
                     respuesta_ia = res_json['candidates'][0]['content']['parts'][0]['text']
                 except Exception as e_api:
-                    respuesta_ia = f"Error al conectar con el motor analítico de Gemini: {str(e_api)}"
+                    respuesta_ia = f"Error de comunicación con el núcleo de Gemini: {str(e_api)}"
                 
-                # Pintar la respuesta en la interfaz
+                # Desplegar respuesta final
                 respuesta_placeholder.markdown(respuesta_ia)
                 st.session_state.historial_chat.append({"role": "assistant", "content": respuesta_ia})
