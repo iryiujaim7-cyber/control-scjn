@@ -28,13 +28,14 @@ if os.path.exists(EXCEL_PATH):
     # --- CUADRO COMPARATIVO ---
     st.subheader("📋 Cuadro Comparativo de Actualizaciones")
     
+    # Tabla con los nombres de columnas corregidos a petición del usuario
     st.dataframe(
         df, 
         use_container_width=True,
         column_config={
-            "Normatividad": st.column_config.TextColumn("Nombre de la Norma", help="Nombre oficial de la ley buscada"),
-            "Última modificación": st.column_config.TextColumn("Dato de Última Actualización (SCJN)"),
-            "Descarga normatividad": st.column_config.TextColumn("Estado del Archivo Local")
+            "Normatividad": st.column_config.TextColumn("Normatividad", help="Nombre oficial de la ley buscada"),
+            "Última modificación": st.column_config.TextColumn("Última actualización de la normatividad"),
+            "Descarga normatividad": st.column_config.TextColumn("Descargar normatividad")
         }
     )
     
