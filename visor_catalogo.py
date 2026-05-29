@@ -26,7 +26,7 @@ GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 if "expediente" not in st.session_state:
     st.session_state.expediente = {}  
 if "archivos_locales" not in st.session_state:
-    st.session_state.archivos_locales = {}  # {Nombre: Bytes del archivo}
+    st.session_state.archivos_locales = {}  
 if "historial_chat" not in st.session_state:
     st.session_state.historial_chat = []
 if "resultados_busqueda" not in st.session_state:
@@ -148,11 +148,24 @@ with col_der:
     st.markdown("🌐 **Cargar documentos locales:**")
     archivos_subidos = st.file_uploader("Sube tus propios archivos para incluirlos en el cruce de información:", type=["pdf", "docx"], accept_multiple_files=True, label_visibility="collapsed")
     
+    # Procesar archivos arrastrados extrayendo su texto limpio de inmediato
     if archivos_subidos:
         for archivo in archivos_subidos:
             if archivo.name not in st.session_state.archivos_locales:
-                # Almacenar los bytes originales de forma persistente
-                st.session_state.archivos_locales[archivo.name] = archivo.getvalue()
+                try:
+                    texto_extraido = ""
+                    if archivo.name.endswith(".pdf"):
+                        lector_pdf = PdfReader(BytesIO(archivo.read()))
+                        for pagina in lector_pdf.pages:
+                            texto_extraido += pagina.extract_text() + "\n"
+                    elif archivo.name.endswith(".docx"):
+                        doc_local = Document(BytesIO(archivo.read()))
+                        texto_extraido = "\n".join([p.text for p in doc_local.paragraphs])
+                    
+                    if texto_extraido.strip():
+                        st.session_state.archivos_locales[archivo.name] = texto_extraido
+                except Exception as e_archivo:
+                    st.error(f"Error extrayendo texto de {archivo.name}: {str(e_archivo)}")
 
     if archivos_subidos is not None:
         nombres_actuales = [a.name for a in archivos_subidos]
@@ -181,7 +194,7 @@ with col_der:
             st.rerun()
 
 # =====================================================================
-# 6. ENTORNO DE CONSULTA INTELIGENTE (SDK OFICIAL - SIN ERRORES DE LÍMITE)
+# 6. ENTORNO DE CONSULTA INTELIGENTE (SDK OFICIAL - TEXTO PURO)
 # =====================================================================
 st.markdown("<br>", unsafe_allow_html=True)
 st.subheader("🤖 Asistente Jurídico Experto (Análisis RAG Unificado)")
@@ -209,83 +222,62 @@ else:
         with st.chat_message("assistant"):
             respuesta_placeholder = st.empty()
             
-            with st.status("🧠 Analizando expediente unificado con el SDK oficial...", expanded=True) as status:
+            with st.status("🧠 Analizando expediente unificado con el motor de Google...", expanded=True) as status:
                 try:
-                    # Inicializar el cliente oficial de Google GenAI
                     client = genai.Client(api_key=GEMINI_API_KEY)
-                    contents_payload = []
-                    archivos_temporales_creados = []
+                    texto_total_unificado = ""
 
-                    # 1. Procesar y descargar leyes de la SCJN
-                    status.write("⏬ Descargando ordenamientos desde la SCJN...")
-                    texto_scjn_acumulado = ""
+                    # 1. Descargar e incorporar leyes de la SCJN
+                    status.write("⏬ Descargando ordenamientos en tiempo real desde la SCJN...")
                     for nombre_ley, url_ley in st.session_state.expediente.items():
                         try:
                             if ".docx" in url_ley or "wfDescarga" in url_ley or "aspx" in url_ley:
                                 res = requests.get(url_ley, timeout=15)
                                 doc = Document(BytesIO(res.content))
-                                texto_scjn_acumulado += f"\n\n=== LEY OFICIAL SCJN: {nombre_ley} ===\n"
-                                texto_scjn_acumulado += "\n".join([p.text for p in doc.paragraphs])
+                                texto_total_unificado += f"\n\n=== LEY OFICIAL SCJN: {nombre_ley} ===\n"
+                                texto_total_unificado += "\n".join([p.text for p in doc.paragraphs])
                         except Exception:
                             pass
-                    
-                    if texto_scjn_acumulado.strip():
-                        contents_payload.append(texto_scjn_acumulado)
 
-                    # 2. Procesar y subir archivos locales usando la Files API de Google (Igual que NotebookLM)
-                    status.write("📖 Subiendo y procesando documentos locales de forma nativa en Google Cloud...")
-                    for nombre_doc, bytes_doc in st.session_state.archivos_locales.items():
-                        status.write(f" -> Transfiriendo archivo de forma segura: `{nombre_doc}`")
-                        
-                        # Guardar archivo temporalmente en el contenedor local para subirlo por ruta al SDK
-                        with open(nombre_doc, "wb") as f_temp:
-                            f_temp.write(bytes_doc)
-                        archivos_temporales_creados.append(nombre_doc)
-                        
-                        # Subir usando el gestor oficial de archivos de Google
-                        archivo_subido_google = client.files.upload(file=nombre_doc)
-                        contents_payload.append(archivo_subido_google)
+                    # 2. Incorporar texto previamente extraído de los archivos locales
+                    status.write("📖 Compilando textos limpios de tus documentos locales...")
+                    for nombre_doc, texto_doc in st.session_state.archivos_locales.items():
+                        status.write(f" -> Integrando contenido extraído de: `{nombre_doc}`")
+                        texto_total_unificado += f"\n\n=== ARCHIVO LOCAL CARGADO: {nombre_doc} ===\n{texto_doc}"
 
-                    # 3. Configuración estricta del prompt del sistema corporativo cerrado
-                    status.write("🧠 Sincronizando e interpretando el contexto unificado en Gemini 1.5 Flash...")
+                    # 3. Configuración estricta del prompt
+                    status.write("🧠 Transfiriendo expediente de forma segura a Gemini 1.5 Flash...")
                     instrucciones_sistema = (
                         "Actúas estrictamente como un sistema experto de análisis documental cerrado (estilo Google NotebookLM).\n"
-                        "Tu única fuente de verdad legítima son los documentos y textos provistos adjuntos en esta sesión.\n\n"
+                        "Tu única fuente de verdad legítima son los documentos provistos en el bloque de CONTEXTO DOCUMENTAL UNIFICADO.\n\n"
                         "Reglas obligatorias de comportamiento:\n"
-                        "1. Responde a la pregunta planteada basándote ÚNICAMENTE en la información explícita de los documentos cargados.\n"
-                        "2. Si la respuesta no se encuentra plasmada en los textos provistos, debes contestar de manera exacta y literal:\n"
+                        "1. Responde a la pregunta planteada basándote ÚNICAMENTE en la información explícita de los documentos.\n"
+                        "2. Si la respuesta no se encuentra plasmada en los textos, debes contestar de manera exacta y literal:\n"
                         "'Lo siento, la información solicitada no se encuentra disponible en las normatividades ni en los documentos cargados en el expediente.'\n"
-                        "No inventes, asumas, presupongas ni utilices conocimientos externos o de tu entrenamiento bajo ninguna circunstancia.\n"
-                        "3. Usa un lenguaje formal, técnico, pragmático y estructurado. Cita siempre el artículo o documento del que extrajiste el argumento.\n"
+                        "No inventes, asumas, presupongas ni utilices conocimientos externos bajo ninguna circunstancia.\n"
+                        "3. Usa un lenguaje formal, técnico y estructurado. Cita siempre el artículo o documento del que extrajiste el argumento.\n\n"
+                        f"CONTEXTO DOCUMENTAL UNIFICADO:\n{texto_total_unificado}\n\n"
+                        f"PREGUNTA DEL USUARIO:\n{pregunta_usuario}"
                     )
 
-                    # Agregar la pregunta final al payload de envío
-                    contents_payload.append(f"\n\nPREGUNTA DEL USUARIO:\n{pregunta_usuario}")
-
-                    status.write("⚖️ Estructurando análisis comparativo y generando respuesta...")
+                    status.write("⚖️ Estructurando análisis normativo y redactando dictamen...")
                     
-                    # Llamada oficial usando el SDK optimizado
+                    # Llamada nativa mediante el SDK de Google (Inmune a errores de formato de archivo)
                     response = client.models.generate_content(
                         model='gemini-1.5-flash',
-                        contents=contents_payload,
+                        contents=instrucciones_sistema,
                         config=types.GenerateContentConfig(
-                            system_instruction=instrucciones_sistema,
-                            temperature=0.0  # Máxima precisión jurídica, cero inventiva
+                            temperature=0.0
                         )
                     )
                     
                     respuesta_ia = response.text
                     status.update(label="✅ Análisis completado con éxito", state="complete", expanded=False)
 
-                    # Limpieza preventiva de archivos locales temporales creados en el servidor
-                    for temp_file in archivos_temporales_creados:
-                        if os.path.exists(temp_file):
-                            os.remove(temp_file)
-
                 except Exception as e_general:
-                    respuesta_ia = f"El motor analítico detectó un inconveniente con el tamaño o estructura de las leyes. Detalle: {str(e_general)}"
-                    status.update(label="❌ Error en el proceso analítico", state="error", expanded=False)
+                    respuesta_ia = f"El motor analítico detectó un inconveniente técnico de procesamiento. Detalle: {str(e_general)}"
+                    status.update(label="❌ Error de procesamiento del texto", state="error", expanded=False)
             
-            # Desplegar respuesta final limpia en pantalla
+            # Imprimir en pantalla
             respuesta_placeholder.markdown(respuesta_ia)
             st.session_state.historial_chat.append({"role": "assistant", "content": respuesta_ia})
