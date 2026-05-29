@@ -11,12 +11,18 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. INYECCIÓN DE IDENTIDAD VISUAL CORPORATIVA (CSS PERSONALIZADO)
+# 2. INYECCIÓN DE IDENTIDAD VISUAL CORPORATIVA (CSS PERSONALIZADO CORREGIDO)
 st.markdown(f"""
     <style>
     /* Fondo principal blanco de la aplicación */
     .stApp {{
         background-color: #F8F9FA;
+    }}
+    
+    /* Reducción drástica del espacio en blanco superior general de Streamlit */
+    .block-container {{
+        padding-top: 1rem !important;
+        padding-bottom: 1rem !important;
     }}
     
     /* Títulos principales en Azul Marino Profundo */
@@ -33,12 +39,14 @@ st.markdown(f"""
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
     }}
 
-    /* Contenedor del Logo centrado y con protagonismo */
+    /* Contenedor del Logo optimizado para eliminar espacios blancos innecesarios */
     .logo-container {{
         display: flex;
         justify-content: center;
         align-items: center;
-        padding: 2rem 0 1rem 0;
+        padding: 0.5rem 0 0.5rem 0; /* Relleno mínimo */
+        margin-top: 0px;
+        margin-bottom: 0px;
     }}
 
     /* Botón de acción en Azul Marino con texto blanco */
@@ -93,18 +101,18 @@ st.markdown(f"""
     </style>
     """, unsafe_allow_html=True)
 
-# 3. ENCABEZADO PRESIDENCIAL (PROTAGONISMO AL LOGO)
-# Creamos tres columnas para centrar perfectamente el logotipo en el eje superior
-_, col_center_logo, _ = st.columns([1, 2, 1])
+# 3. ENCABEZADO PRESIDENCIAL CON ESPACIOS REDUCIDOS
+# Ajustamos las columnas laterales para dar un ancho óptimo al logo sin dejar huecos vacíos
+_, col_center_logo, _ = st.columns([1.5, 1, 1.5])
 with col_center_logo:
     st.markdown('<div class="logo-container">', unsafe_allow_html=True)
     st.image(LOGO_URL, use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-# Título y subtítulos centrados con tipografía formal
-st.markdown("<h1 style='font-size: 2.5rem; margin-bottom: 0.5rem;'>Catálogo y Control de Normatividades</h1>", unsafe_allow_html=True)
-st.markdown("<h4 style='text-align: center; font-weight: normal; margin-bottom: 2rem;'>En la siguiente tabla puedes consultar las últimas actualizaciones de diversas normatividades</h4>", unsafe_allow_html=True)
-st.markdown("<hr style='border-top: 1px solid #E2E8F0; margin-bottom: 2rem;'>", unsafe_allow_html=True)
+# Título y subtítulos con márgenes estilizados y compactos
+st.markdown("<h1 style='font-size: 2.3rem; margin-top: 0px; margin-bottom: 0.2rem;'>Catálogo y Control de Normatividades</h1>", unsafe_allow_html=True)
+st.markdown("<h4 style='text-align: center; font-weight: normal; margin-top: 0px; margin-bottom: 1.5rem; font-size: 1.1rem;'>En la siguiente tabla puedes consultar las últimas actualizaciones de diversas normatividades</h4>", unsafe_allow_html=True)
+st.markdown("<hr style='border-top: 1px solid #E2E8F0; margin-top: 0px; margin-bottom: 1.5rem;'>", unsafe_allow_html=True)
 
 # 4. RUTAS DE INTERCAMBIO DE DATOS
 EXCEL_PATH = "registro_normatividades.xlsx"
@@ -125,7 +133,7 @@ if os.path.exists(EXCEL_PATH):
     st.markdown("<br>", unsafe_allow_html=True)
     
     # --- CUADRO COMPARATIVO INTERACTIVO ARMÓNICO ---
-    st.markdown("<h3 style='text-align: left; font-size: 1.5rem; margin-bottom: 1rem;'>📋 Cuadro Comparativo de Actualizaciones</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: left; font-size: 1.4rem; margin-bottom: 0.8rem; font-family: Georgia, serif;'>📋 Cuadro Comparativo de Actualizaciones</h3>", unsafe_allow_html=True)
     
     st.dataframe(
         df, 
