@@ -278,7 +278,7 @@ else:
                     )
 
                     # Invocar al modelo
-                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    model = genai.GenerativeModel('gemini-flash-latest')
                     response = model.generate_content(
                         instrucciones_sistema,
                         generation_config={"temperature": 0.0}
