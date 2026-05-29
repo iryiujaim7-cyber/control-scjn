@@ -242,7 +242,7 @@ else:
             
             with st.status("🧠 Analizando expediente unificado con Google GenAI...", expanded=True) as status:
                 try:
-                    # Configurar la API con el SDK Clásico
+                    # Configurar la API directamente
                     genai.configure(api_key=GEMINI_API_KEY)
                     texto_total_unificado = ""
 
@@ -261,50 +261,35 @@ else:
                     for nombre_doc, texto_doc in st.session_state.archivos_locales.items():
                         texto_total_unificado += f"\n\n=== ARCHIVO LOCAL CARGADO: {nombre_doc} ===\n{texto_doc}"
 
-                    status.write("🛡️ Encriptando contexto en archivo plano temporal...")
-                    temp_txt_path = "contexto_unificado_agora.txt"
-                    with open(temp_txt_path, "w", encoding="utf-8") as f:
-                        f.write(texto_total_unificado)
-
-                    status.write("☁️ Subiendo expediente a la bóveda de análisis de Google...")
-                    # Subir el archivo .txt usando el gestor estable
-                    archivo_nube = genai.upload_file(temp_txt_path, mime_type="text/plain")
-
-                    status.write("⚖️ Ejecutando análisis jurisprudencial...")
+                    status.write("⚖️ Ejecutando análisis jurisprudencial directo...")
+                    
+                    # Inyectamos el texto extraído directamente al prompt, sin subir archivos
                     instrucciones_sistema = (
                         "Actúas estrictamente como un sistema experto de análisis documental cerrado (estilo Google NotebookLM).\n"
-                        "Tu única fuente de verdad legítima son los documentos provistos en el archivo adjunto.\n\n"
+                        "Tu única fuente de verdad legítima son los documentos provistos a continuación.\n\n"
                         "Reglas obligatorias de comportamiento:\n"
                         "1. Responde a la pregunta planteada basándote ÚNICAMENTE en la información de los documentos.\n"
                         "2. Si la respuesta no se encuentra, debes contestar de manera exacta y literal:\n"
                         "'Lo siento, la información solicitada no se encuentra disponible en las normatividades ni en los documentos cargados en el expediente.'\n"
                         "No inventes, asumas, ni utilices conocimientos externos.\n"
                         "3. Usa un lenguaje formal, técnico y estructurado. Cita siempre el artículo o documento del que extrajiste el argumento.\n\n"
+                        f"DOCUMENTOS DE REFERENCIA:\n{texto_total_unificado}\n\n"
                         f"PREGUNTA DEL USUARIO:\n{pregunta_usuario}"
                     )
 
                     # Invocar al modelo
                     model = genai.GenerativeModel('gemini-1.5-flash')
                     response = model.generate_content(
-                        [archivo_nube, instrucciones_sistema],
+                        instrucciones_sistema,
                         generation_config={"temperature": 0.0}
                     )
                     
                     respuesta_ia = response.text
                     status.update(label="✅ Análisis completado con éxito", state="complete", expanded=False)
 
-                    # Limpieza segura de los archivos en Google y en el servidor
-                    try:
-                        genai.delete_file(archivo_nube.name)
-                        os.remove(temp_txt_path)
-                    except Exception:
-                        pass
-
                 except Exception as e_general:
                     respuesta_ia = f"El motor analítico experimentó un fallo. Detalle técnico: {str(e_general)}"
                     status.update(label="❌ Error de procesamiento en la nube", state="error", expanded=True)
-                    if os.path.exists("contexto_unificado_agora.txt"):
-                        os.remove("contexto_unificado_agora.txt")
             
             respuesta_placeholder.markdown(respuesta_ia)
             st.session_state.historial_chat.append({"role": "assistant", "content": respuesta_ia})
