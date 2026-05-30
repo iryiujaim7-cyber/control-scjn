@@ -2,7 +2,6 @@ import streamlit as st
 import streamlit.components.v1 as components
 from pypdf import PdfReader
 from docx import Document
-from io import BytesIO
 import google.generativeai as genai
 
 # =====================================================================
@@ -20,9 +19,8 @@ if "GEMINI_API_KEY" not in st.secrets:
     st.info("Por favor, ve a Settings -> Secrets en tu app y añade: GEMINI_API_KEY = 'tu_llave'")
     st.stop()
 
-# Configuración del modelo con el prefijo oficial 'models/'
+# Configuración de la API
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-model = genai.GenerativeModel(model_name="models/gemini-1.5-flash")
 
 col1, col2 = st.columns([7, 3])
 
@@ -63,12 +61,13 @@ with col2:
         else:
             with st.status("🧠 Analizando documentos...", expanded=True) as status:
                 try:
+                    # 1. Extracción del texto de los documentos
                     contexto_unificado = ""
                     for data in st.session_state.expediente.values():
                         archivo = data["archivo"]
                         nombre_final = data["nombre_display"]
                         
-                        # Reset al puntero del archivo para leerlo nuevamente
+                        # Reset al puntero del archivo para leerlo correctamente
                         archivo.seek(0)
                         
                         texto = ""
@@ -81,10 +80,25 @@ with col2:
                         
                         contexto_unificado += f"\n\n--- DOCUMENTO: {nombre_final} ---\n{texto}"
 
-                    instruccion = f"Basado en estos documentos:\n{contexto_unificado}\n\nPregunta: {pregunta}"
-                    respuesta = model.generate_content(instruccion)
+                    instruccion = f"Basado estrictamente en estos documentos:\n{contexto_unificado}\n\nPregunta: {pregunta}"
                     
-                    st.markdown(respuesta.text)
-                    status.update(label="✅ Análisis completado", state="complete")
+                    # 2. Intento de respuesta con Gemini 1.5 Flash (Mejor para textos largos)
+                    try:
+                        model = genai.GenerativeModel('gemini-1.5-flash')
+                        respuesta = model.generate_content(instruccion)
+                        st.markdown(respuesta.text)
+                        status.update(label="✅ Análisis completado", state="complete")
+                        
+                    except Exception as e_flash:
+                        # 3. PLAN B: Si Streamlit Cloud lanza el error 404, cambiamos a Gemini Pro automáticamente
+                        if "404" in str(e_flash) or "not found" in str(e_flash).lower():
+                            model_fallback = genai.GenerativeModel('gemini-pro')
+                            respuesta_fallback = model_fallback.generate_content(instruccion)
+                            st.markdown(respuesta_fallback.text)
+                            status.update(label="✅ Análisis completado (Modo Compatibilidad)", state="complete")
+                        else:
+                            # Si es un error distinto al 404, lo mostramos
+                            st.error(f"Error técnico al procesar: {e_flash}")
+
                 except Exception as e:
-                    st.error(f"Error técnico: {e}")
+                    st.error(f"Error general: {e}")
