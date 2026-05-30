@@ -82,23 +82,11 @@ with col2:
 
                     instruccion = f"Basado estrictamente en estos documentos:\n{contexto_unificado}\n\nPregunta: {pregunta}"
                     
-                    # 2. Intento de respuesta con Gemini 1.5 Flash (Mejor para textos largos)
-                    try:
-                        model = genai.GenerativeModel('gemini-1.5-flash')
-                        respuesta = model.generate_content(instruccion)
-                        st.markdown(respuesta.text)
-                        status.update(label="✅ Análisis completado", state="complete")
+                    # 2. Uso del modelo actual y vigente en el catálogo de Google
+                    model = genai.GenerativeModel('gemini-2.5-flash')
+                    respuesta = model.generate_content(instruccion)
+                    st.markdown(respuesta.text)
+                    status.update(label="✅ Análisis completado", state="complete")
                         
-                    except Exception as e_flash:
-                        # 3. PLAN B: Si Streamlit Cloud lanza el error 404, cambiamos a Gemini Pro automáticamente
-                        if "404" in str(e_flash) or "not found" in str(e_flash).lower():
-                            model_fallback = genai.GenerativeModel('gemini-pro')
-                            respuesta_fallback = model_fallback.generate_content(instruccion)
-                            st.markdown(respuesta_fallback.text)
-                            status.update(label="✅ Análisis completado (Modo Compatibilidad)", state="complete")
-                        else:
-                            # Si es un error distinto al 404, lo mostramos
-                            st.error(f"Error técnico al procesar: {e_flash}")
-
                 except Exception as e:
                     st.error(f"Error general: {e}")
