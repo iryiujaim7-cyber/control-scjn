@@ -7,18 +7,14 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 def buscar_normatividades_scjn(termino):
-    """
-    Robot buscador de alta precisión. Navega directamente a los resultados 
-    y espera a que Angular termine de inyectar los hipervínculos.
-    """
     opciones = Options()
     opciones.add_argument("--headless") 
     opciones.add_argument("--no-sandbox")
     opciones.add_argument("--disable-dev-shm-usage")
     opciones.add_argument("--disable-gpu")
     
-    # Capa extra de camuflaje para evitar que la SCJN nos bloquee por ser un robot
-    opciones.add_argument("--disable-blink-features=AutomationControlled")
+    # CLAVE: Forzar una resolución de monitor grande para que Angular no oculte elementos
+    opciones.add_argument("--window-size=1920,1080") 
     opciones.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
     
     resultados_scjn = []
@@ -26,54 +22,59 @@ def buscar_normatividades_scjn(termino):
     
     try:
         driver = webdriver.Chrome(options=opciones)
-        
-        # 1. Armar la URL exacta de búsqueda (es más rápido y no falla)
         termino_codificado = urllib.parse.quote(termino)
         url_busqueda = f"https://legislacion.scjn.gob.mx/consulta/buscador?tBusq=1&pageSizeOrd=50&q={termino_codificado}"
         
-        # Viajar a la página
         driver.get(url_busqueda)
         wait = WebDriverWait(driver, 15)
         
-        # 2. EL SENSOR INTELIGENTE: Esperar obligatoriamente a que aparezca "Total de resultados"
-        try:
-            wait.until(EC.presence_of_element_located((By.XPATH, "//*[contains(text(), 'Total de resultados')]")))
-        except Exception:
-            # Si tarda mucho, le damos un respiro forzado
-            time.sleep(5)
-            
-        # Dar 3 segundos extra para que los enlaces se rellenen internamente
-        time.sleep(3)
+        # Esperar a que la base de datos de la SCJN renderice
+        wait.until(EC.presence_of_element_located((By.XPATH, "//*[contains(text(), 'Total de resultados') or contains(text(), 'No se encontraron')]")))
+        time.sleep(3) # Pausa breve para que terminen las animaciones de la interfaz
         
-        # 3. Extraer la lista de leyes
+        # ESTRATEGIA 1: Buscar hipervínculos tradicionales
         enlaces = driver.find_elements(By.TAG_NAME, "a")
-        leyes_encontradas = set() 
+        leyes_encontradas = set()
+        palabras_ignoradas = ["buscar", "avanzada", "inicio", "filtros", "resumen", "extractos", "descargar", "scjn"]
         
         for enlace in enlaces:
             texto = enlace.text.strip()
             url_documento = enlace.get_attribute("href")
             
-            # Asegurarnos de que el enlace exista y el texto no sea un botón vacío
-            if url_documento and len(texto) > 10:
-                url_baja = url_documento.lower()
-                
-                # Buscar palabras clave en la URL que la SCJN usa para guardar sus leyes
-                if "ordenamiento" in url_baja or "ficha" in url_baja or "documento" in url_baja:
-                    
-                    # Limpiar el texto (a veces Angular junta el título con el subtítulo)
+            if url_documento and len(texto) > 15:
+                # Si el enlace no es un botón genérico del menú
+                if not any(palabra in texto.lower() for palabra in palabras_ignoradas):
                     texto_limpio = texto.replace('\n', ' ').strip()
-                    
                     if texto_limpio not in leyes_encontradas:
                         leyes_encontradas.add(texto_limpio)
                         resultados_scjn.append({
                             "Normatividad": texto_limpio,
-                            "Última actualización": "SCJN (Extracción en vivo)",
+                            "Última actualización": "SCJN (Extracción directa)",
                             "Url Descarga": url_documento
                         })
-                        
-            # Detenerse al encontrar los 5 mejores para no hacer una lista infinita
             if len(resultados_scjn) >= 5:
                 break
+                
+        # ESTRATEGIA 2: Si Angular ofuscó los enlaces, leemos literalmente la pantalla
+        if not resultados_scjn:
+            cuerpo_texto = driver.find_element(By.TAG_NAME, "body").text
+            lineas = cuerpo_texto.split('\n')
+            
+            for i, linea in enumerate(lineas):
+                # En la SCJN, debajo de cada ley siempre dice "Ámbito: FEDERAL..."
+                if "Ámbito: " in linea or "Categoría: " in linea:
+                    titulo_ley = lineas[i-1].strip() # Tomamos la línea de arriba (el título)
+                    
+                    if len(titulo_ley) > 10 and titulo_ley not in leyes_encontradas and "resultados" not in titulo_ley.lower():
+                        leyes_encontradas.add(titulo_ley)
+                        # Como los enlaces están bloqueados, asignamos la URL general
+                        resultados_scjn.append({
+                            "Normatividad": titulo_ley,
+                            "Última actualización": "SCJN (Lectura visual)",
+                            "Url Descarga": url_busqueda
+                        })
+                if len(resultados_scjn) >= 5:
+                    break
 
     except Exception as e:
         print(f"Error en la extracción: {e}")
@@ -82,11 +83,10 @@ def buscar_normatividades_scjn(termino):
         if driver:
             driver.quit()
             
-    # Plan de respaldo solo si hay un fallo crítico
     if not resultados_scjn:
         resultados_scjn.append({
-            "Normatividad": f"Se encontraron resultados para: '{termino}'. Haz clic en Añadir para cargar el documento general.",
-            "Última actualización": "SCJN (Enlace Forzado)",
+            "Normatividad": f"No hay resultados disponibles en la SCJN para '{termino}'.",
+            "Última actualización": "Verifica tu búsqueda",
             "Url Descarga": url_busqueda
         })
         
