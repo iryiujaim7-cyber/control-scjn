@@ -3,3 +3,4 @@ google-generativeai
 python-docx
 pypdf
 selenium
+google-generativeai>=0.4.0
