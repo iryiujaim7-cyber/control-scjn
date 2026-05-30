@@ -2,6 +2,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 from pypdf import PdfReader
 from docx import Document
+from io import BytesIO
 import google.generativeai as genai
 
 # =====================================================================
@@ -19,7 +20,7 @@ if "GEMINI_API_KEY" not in st.secrets:
     st.info("Por favor, ve a Settings -> Secrets en tu app y añade: GEMINI_API_KEY = 'tu_llave'")
     st.stop()
 
-# Configuración del modelo
+# Configuración del modelo con el prefijo oficial 'models/'
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 model = genai.GenerativeModel(model_name="models/gemini-1.5-flash")
 
