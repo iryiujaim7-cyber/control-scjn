@@ -1,21 +1,39 @@
 import streamlit as st
+import streamlit.components.v1 as components
 from pypdf import PdfReader
 from docx import Document
-from io import BytesIO
 import google.generativeai as genai
 
 # =====================================================================
-# 1. INICIALIZACIÓN DE MEMORIA
+# 1. CONFIGURACIÓN E INICIALIZACIÓN
 # =====================================================================
-if "expediente" not in st.session_state: st.session_state.expediente = {}
+if "expediente" not in st.session_state: 
+    st.session_state.expediente = {}
 
 st.set_page_config(page_title="Ágora - Inteligencia Normativa", layout="wide")
 st.title("🏛️ Ágora - Inteligencia Normativa")
 
+# --- VERIFICACIÓN DE CREDENCIALES ---
+if "GEMINI_API_KEY" not in st.secrets:
+    st.error("❌ No se encontró la llave GEMINI_API_KEY en los secretos de Streamlit.")
+    st.info("Por favor, ve a Settings -> Secrets en tu app y añade: GEMINI_API_KEY = 'tu_llave'")
+    st.stop()
+
+# Configuración del modelo
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+model = genai.GenerativeModel(model_name="gemini-1.5-flash")
+
 col1, col2 = st.columns([7, 3])
 
 # =====================================================================
-# 2. PANEL DE INGESTA CON RENOMBRADO (A LA DERECHA)
+# 2. PANEL IZQUIERDO: VISOR OFICIAL
+# =====================================================================
+with col1:
+    st.subheader("🌐 Navegador SCJN Integrado")
+    components.iframe("https://legislacion.scjn.gob.mx/consulta/home", height=800, scrolling=True)
+
+# =====================================================================
+# 3. PANEL DERECHO: ÁREA DE ANÁLISIS
 # =====================================================================
 with col2:
     st.subheader("📥 Área de Análisis")
@@ -23,22 +41,18 @@ with col2:
 
     if archivos:
         for archivo in archivos:
-            # Si el archivo es nuevo, lo pre-cargamos en el expediente con su nombre original
             if archivo.name not in st.session_state.expediente:
                 st.session_state.expediente[archivo.name] = {"archivo": archivo, "nombre_display": archivo.name}
 
         # --- RENOMBRADO RÁPIDO ---
         st.markdown("---")
-        st.write("##### 🏷️ Renombrar leyes para el análisis:")
+        st.write("##### 🏷️ Renombrar leyes:")
         for nombre_original in list(st.session_state.expediente.keys()):
             nuevo_nombre = st.text_input(f"Renombrar {nombre_original}:", 
                                         value=st.session_state.expediente[nombre_original]["nombre_display"],
                                         key=f"input_{nombre_original}")
             st.session_state.expediente[nombre_original]["nombre_display"] = nuevo_nombre
 
-# =====================================================================
-# 3. PROCESAMIENTO Y CONSULTA (A LA DERECHA - CHAT)
-# =====================================================================
     st.markdown("---")
     pregunta = st.chat_input("Plantea tu duda jurídica sobre los archivos cargados...")
 
@@ -48,14 +62,13 @@ with col2:
         else:
             with st.status("🧠 Analizando documentos...", expanded=True) as status:
                 try:
-                    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-                    model = genai.GenerativeModel(model_name="gemini-1.5-flash")
-
-                    # Extraer texto y concatenar
                     contexto_unificado = ""
                     for data in st.session_state.expediente.values():
                         archivo = data["archivo"]
                         nombre_final = data["nombre_display"]
+                        
+                        # Reset al puntero del archivo para leerlo nuevamente
+                        archivo.seek(0)
                         
                         texto = ""
                         if archivo.name.endswith(".pdf"):
@@ -69,15 +82,8 @@ with col2:
 
                     instruccion = f"Basado en estos documentos:\n{contexto_unificado}\n\nPregunta: {pregunta}"
                     respuesta = model.generate_content(instruccion)
+                    
                     st.markdown(respuesta.text)
                     status.update(label="✅ Análisis completado", state="complete")
                 except Exception as e:
-                    st.error(f"Error: {e}")
-
-# =====================================================================
-# 4. VISOR OFICIAL (A LA IZQUIERDA)
-# =====================================================================
-with col1:
-    import streamlit.components.v1 as components
-    st.subheader("🌐 Navegador SCJN Integrado")
-    components.iframe("https://legislacion.scjn.gob.mx/consulta/home", height=800, scrolling=True)
+                    st.error(f"Error técnico: {e}")
