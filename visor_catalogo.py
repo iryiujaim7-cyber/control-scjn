@@ -4,43 +4,75 @@ from io import BytesIO
 import google.generativeai as genai
 from scjn_scraper import buscar_normatividades_scjn
 
-# --- INICIALIZACIÓN DE MEMORIA SEGURA ---
+# =====================================================================
+# 1. INICIALIZACIÓN DE MEMORIA Y CONFIGURACIÓN
+# =====================================================================
 if "expediente" not in st.session_state: st.session_state.expediente = {}
 if "resultados_busqueda" not in st.session_state: st.session_state.resultados_busqueda = []
 
-st.set_page_config(layout="wide")
-st.title("Ágora - Inteligencia Normativa")
+st.set_page_config(page_title="Ágora - Inteligencia Normativa", layout="wide")
+st.title("🏛️ Ágora - Inteligencia Normativa")
 
-col1, col2 = st.columns(2)
+col1, col2 = st.columns([1, 1])
 
-# --- PANEL DE BÚSQUEDA ---
+# =====================================================================
+# 2. PANEL DE BÚSQUEDA (COLUMNA IZQUIERDA)
+# =====================================================================
 with col1:
-    termino = st.text_input("Buscar normatividad en SCJN:")
+    st.subheader("🔍 Consulta Directa en la SCJN")
+    termino = st.text_input("Escribe el concepto a buscar:")
+    
     if st.button("Buscar en SCJN"):
-        with st.spinner("Conectando con la Corte..."):
-            # Aquí llamamos a tu scjn_scraper.py
+        with st.spinner("Navegando en los servidores de la Corte..."):
             st.session_state.resultados_busqueda = buscar_normatividades_scjn(termino)
             st.rerun()
 
-    for idx, item in enumerate(st.session_state.resultados_busqueda):
-        st.markdown(f"**{item['Normatividad']}**")
-        if st.button(f"Añadir", key=f"btn_{idx}"):
-            st.session_state.expediente[item['Normatividad']] = item['Url Descarga']
-            st.success("¡Añadido!")
+    # Visualización de resultados corregida para evitar errores de renderizado
+    if st.session_state.resultados_busqueda:
+        st.markdown("### Resultados encontrados:")
+        for idx, item in enumerate(st.session_state.resultados_busqueda):
+            # Imprimimos el título de manera independiente para asegurar visibilidad
+            st.markdown(f"**{item['Normatividad']}**")
+            st.caption(f"📅 {item['Última actualización']}")
+            
+            if st.button("Añadir al Expediente", key=f"btn_{idx}"):
+                st.session_state.expediente[item['Normatividad']] = item['Url Descarga']
+                st.success(f"¡{item['Normatividad']} añadida!")
+            
+            st.divider()
 
-# --- PANEL DE ANÁLISIS ---
+# =====================================================================
+# 3. PANEL DE CONSULTA DE IA (COLUMNA DERECHA)
+# =====================================================================
 with col2:
     st.subheader("🤖 Consultor Jurídico")
-    pregunta = st.chat_input("Escribe tu duda sobre las leyes añadidas...")
+    
+    if not st.session_state.expediente:
+        st.info("Tu expediente está vacío. Busca y añade una ley para comenzar.")
+    else:
+        st.write("Leyes en tu expediente actual:")
+        for ley in st.session_state.expediente.keys():
+            st.markdown(f"- 🏛️ {ley}")
+            
+    pregunta = st.chat_input("Plantea tu duda jurídica sobre estas leyes...")
+    
     if pregunta:
-        try:
-            genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-            model = genai.GenerativeModel('gemini-flash-latest')
-            
-            # Unimos los textos del expediente
-            contexto = "\n".join([f"Ley: {k}, Fuente: {v}" for k, v in st.session_state.expediente.items()])
-            
-            respuesta = model.generate_content(f"Contexto: {contexto}\n\nPregunta: {pregunta}")
-            st.markdown(respuesta.text)
-        except Exception as e:
-            st.error(f"Error en IA: {e}")
+        if not st.session_state.expediente:
+            st.error("Por favor, añade al menos una ley a tu expediente primero.")
+        else:
+            with st.status("🧠 Analizando documentos con Google GenAI...", expanded=True) as status:
+                try:
+                    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                    model = genai.GenerativeModel('gemini-flash-latest')
+                    
+                    # Unimos los nombres de las leyes en el contexto
+                    contexto = "\n".join([f"Normatividad: {k}" for k in st.session_state.expediente.keys()])
+                    
+                    # Llamada a la IA
+                    instruccion = f"Basado estrictamente en las normatividades cargadas:\n{contexto}\n\nResponde a: {pregunta}"
+                    respuesta = model.generate_content(instruccion)
+                    
+                    st.markdown(respuesta.text)
+                    status.update(label="✅ Análisis completado", state="complete")
+                except Exception as e:
+                    st.error(f"Error técnico: {e}")
