@@ -49,7 +49,7 @@ with col2:
             with st.status("🧠 Analizando documentos...", expanded=True) as status:
                 try:
                     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    model = genai.GenerativeModel('gemini-pro')
 
                     # Extraer texto y concatenar
                     contexto_unificado = ""
