@@ -13,6 +13,7 @@ if "resultados_busqueda" not in st.session_state: st.session_state.resultados_bu
 st.set_page_config(page_title="Ágora - Inteligencia Normativa", layout="wide")
 st.title("🏛️ Ágora - Inteligencia Normativa")
 
+# Separación en dos columnas: Izquierda (Busqueda) y Derecha (IA)
 col1, col2 = st.columns([1, 1])
 
 # =====================================================================
@@ -32,12 +33,11 @@ with col1:
     if st.session_state.resultados_busqueda:
         st.markdown("### Resultados encontrados:")
         for idx, item in enumerate(st.session_state.resultados_busqueda):
-            # Título en negritas para asegurar visibilidad
+            # Título y detalles para asegurar visibilidad total
             st.markdown(f"**🏛️ {item['Normatividad']}**")
-            # Detalles técnicos (fecha/ámbito)
             st.caption(f"ℹ️ {item['Detalles']}")
             
-            # Botón de acción con estado persistente
+            # Botón de añadir al expediente
             if st.button("Añadir al Expediente", key=f"btn_{idx}"):
                 st.session_state.expediente[item['Normatividad']] = item['Url Descarga']
                 st.success(f"¡{item['Normatividad']} añadida!")
