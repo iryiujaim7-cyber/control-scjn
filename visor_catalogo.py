@@ -21,7 +21,7 @@ if "GEMINI_API_KEY" not in st.secrets:
 
 # Configuración del modelo
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-model = genai.GenerativeModel(model_name="gemini-1.5-flash")
+model = genai.GenerativeModel(model_name="models/gemini-1.5-flash")
 
 col1, col2 = st.columns([7, 3])
 
